@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -12,11 +13,8 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-secondary p-6">
       <div className="w-full max-w-[380px]">
-        <div className="mb-7 flex items-center gap-2.5">
-          <div className="flex size-[30px] items-center justify-center rounded-md bg-[#123C7A] font-heading text-[15px] font-bold text-white">
-            L
-          </div>
-          <span className="font-heading text-[17px] font-semibold tracking-tight">Ledger</span>
+        <div className="mb-7">
+          <Image src="/logo.png" alt="Regix360" width={2111} height={524} className="h-8 w-auto" priority />
         </div>
         <form
           className="rounded-lg border border-border bg-card p-[30px]"

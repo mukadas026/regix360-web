@@ -23,8 +23,32 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ledger — Asset Platform",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
+  title: "Regix360",
   description: "A living register of your organization's physical assets.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png" }],
+  },
+  manifest: "/site.webmanifest",
+  openGraph: {
+    title: "Regix360",
+    description: "A living register of your organization's physical assets.",
+    images: [{ url: "/logo.png", width: 2111, height: 524, alt: "Regix360" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Regix360",
+    description: "A living register of your organization's physical assets.",
+    images: ["/logo.png"],
+  },
 };
 
 export default function RootLayout({
