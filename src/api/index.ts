@@ -1,0 +1,14 @@
+export { client, throwError, BASE_URL } from "./client";
+export type { ApiError } from "./client";
+
+// Feature endpoints live in sibling files and are re-exported here. Each
+// endpoint is `{ key, fn }`, consumed directly with useQuery/useMutation —
+// see src/api/client.ts for the shared axios instance. `fn` bodies are mock
+// implementations for now (no backend yet) — swap them for `client` calls
+// once a real API contract exists; call sites don't change.
+export * from "./assets";
+export * from "./locations";
+export * from "./verification";
+export * from "./reports";
+export * from "./org";
+export * from "./dashboard";
