@@ -1,5 +1,4 @@
 import { OrgNav, MobileTopBar } from "@/components/global/org-nav";
-import { DemoRoleSwitcher } from "@/components/global/demo-role-switcher";
 import { SessionProvider } from "@/providers/session-provider";
 
 export default function OrgLayout({ children }: { children: React.ReactNode }) {
@@ -11,7 +10,6 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
           <OrgNav />
           <main className="min-w-0 flex-1 overflow-y-auto bg-background">{children}</main>
         </div>
-        <DemoRoleSwitcher />
       </div>
     </SessionProvider>
   );
