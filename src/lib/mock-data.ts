@@ -106,7 +106,7 @@ export const mockCategoryDictionary: CategoryOption[] = Object.entries(itemsByCa
 );
 
 export const mockUsers: OrgUser[] = [
-  { id: "user-1", name: "Ama Mensah", email: "ama@cornerstonefcc.org", role: "admin", isActive: true, lastActive: "Today" },
+  { id: "user-1", name: "Ama Mensah", email: "ama@cornerstonefcc.org", role: "org_admin", isActive: true, lastActive: "Today" },
   { id: "user-2", name: "Kwabena Osei", email: "kwabena@cornerstonefcc.org", role: "asset_manager", isActive: true, lastActive: "Yesterday" },
   { id: "user-3", name: "Efua Boateng", email: "efua@cornerstonefcc.org", role: "viewer", isActive: true, lastActive: "3 days ago" },
   { id: "user-4", name: "Yaw Darko", email: "yaw@cornerstonefcc.org", role: "viewer", isActive: false, lastActive: "2 months ago" },

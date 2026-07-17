@@ -2,13 +2,15 @@
 
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { deleteCookie } from "cookies-next";
 import {
   Activity,
   ChevronLeft,
   ClipboardCheck,
   FileBarChart,
   LayoutDashboard,
+  LogOut,
   MapPin,
   Menu,
   Network,
@@ -20,6 +22,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TOKEN_COOKIE } from "@/api/client";
 import { mockOrg } from "@/lib/mock-data";
 import { useSession } from "@/providers/session-provider";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -40,7 +43,7 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-const roleLabels = { admin: "Org admin", asset_manager: "Asset manager", viewer: "Viewer" };
+const roleLabels = { org_admin: "Org admin", asset_manager: "Asset manager", viewer: "Viewer" };
 
 const COLLAPSE_STORAGE_KEY = "org-nav-collapsed";
 
@@ -105,6 +108,12 @@ function NavLinks({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?:
 
 function UserFooter({ collapsed }: { collapsed?: boolean }) {
   const { role } = useSession();
+  const router = useRouter();
+
+  function signOut() {
+    deleteCookie(TOKEN_COOKIE);
+    router.push("/login");
+  }
 
   return (
     <div className={cn("mt-auto flex items-center gap-2.5 border-t border-sidebar-border pt-3", collapsed && "justify-center")}>
@@ -117,6 +126,13 @@ function UserFooter({ collapsed }: { collapsed?: boolean }) {
           <div className="text-[11px] text-sidebar-foreground/60 capitalize">{roleLabels[role]}</div>
         </div>
       )}
+      <button
+        onClick={signOut}
+        title="Sign out"
+        className="flex-none rounded-md p-1.5 text-sidebar-foreground/70 hover:bg-white/10 hover:text-sidebar-foreground"
+      >
+        <LogOut size={15} />
+      </button>
     </div>
   );
 }

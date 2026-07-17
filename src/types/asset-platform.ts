@@ -1,4 +1,6 @@
-export type Role = "admin" | "asset_manager" | "viewer";
+export type Role = "org_admin" | "asset_manager" | "viewer";
+
+export type PlatformRole = "operator" | "super_admin";
 
 export type Condition = "good" | "fair" | "bad";
 

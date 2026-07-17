@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/providers/session-provider";
 
-const roleLabels: Record<Role, string> = { admin: "Org admin", asset_manager: "Asset manager", viewer: "Viewer" };
+const roleLabels: Record<Role, string> = { org_admin: "Org admin", asset_manager: "Asset manager", viewer: "Viewer" };
 
 export default function UsersPage() {
   const { isAdmin } = useSession();

@@ -6,6 +6,7 @@ export type { ApiError } from "./client";
 // see src/api/client.ts for the shared axios instance. `fn` bodies are mock
 // implementations for now (no backend yet) — swap them for `client` calls
 // once a real API contract exists; call sites don't change.
+export * from "./auth";
 export * from "./assets";
 export * from "./locations";
 export * from "./verification";
