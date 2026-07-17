@@ -43,9 +43,17 @@ export const getDashboard = {
       { icon: "+", text: "Spintex location added", when: "1 week ago" },
     ];
 
+    const byCategory = Array.from(new Set(mockAssets.map((a) => a.category))).map((category) => ({
+      category,
+      count: mockAssets
+        .filter((a) => a.category === category)
+        .reduce((sum, a) => sum + a.good + a.fair + a.bad, 0),
+    }));
+
     return delay({
       kpi: { assets: totalAssets, locations: mockLocations.length, ...totals },
       byLocation: byLocation.map((l) => ({ ...l, pct: `${Math.round((l.count / maxCount) * 100)}%` })),
+      byCategory,
       attention,
       activity,
     });

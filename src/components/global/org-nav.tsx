@@ -3,7 +3,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardCheck, FileBarChart, LayoutDashboard, MapPin, Menu, Package, Settings } from "lucide-react";
+import {
+  Activity,
+  ClipboardCheck,
+  FileBarChart,
+  LayoutDashboard,
+  MapPin,
+  Menu,
+  Network,
+  Package,
+  Repeat,
+  Settings,
+  Trash2,
+  Users,
+  Wrench,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { mockOrg } from "@/lib/mock-data";
 import { useSession } from "@/providers/session-provider";
@@ -13,9 +27,15 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/assets", label: "Assets", icon: Package },
+  { href: "/users", label: "Users", icon: Users },
   { href: "/locations", label: "Locations", icon: MapPin },
+  { href: "/departments", label: "Departments", icon: Network },
   { href: "/verification", label: "Verification", icon: ClipboardCheck },
+  { href: "/transfers", label: "Transfers", icon: Repeat },
+  { href: "/maintenance", label: "Maintenance", icon: Wrench },
+  { href: "/disposal", label: "Disposal", icon: Trash2 },
   { href: "/reports", label: "Reports", icon: FileBarChart },
+  { href: "/activity-logs", label: "Activity Logs", icon: Activity },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

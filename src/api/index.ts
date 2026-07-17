@@ -12,3 +12,8 @@ export * from "./verification";
 export * from "./reports";
 export * from "./org";
 export * from "./dashboard";
+export * from "./departments";
+export * from "./transfers";
+export * from "./maintenance";
+export * from "./disposal";
+export * from "./activity";

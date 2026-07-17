@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { Cell, Pie, PieChart, Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { getDashboard } from "@/api";
 import { ConditionBar } from "@/components/global/condition-bar";
 import { PageContainer } from "@/components/global/page-container";
@@ -9,6 +10,12 @@ import { StatCard } from "@/components/global/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/global/empty-state";
 import { Button } from "@/components/ui/button";
+
+const conditionColors = {
+  good: "var(--color-status-good)",
+  fair: "var(--color-status-fair)",
+  bad: "var(--color-status-bad)",
+};
 
 export default function DashboardPage() {
   const { data, isPending } = useQuery({
@@ -65,6 +72,53 @@ export default function DashboardPage() {
           <ConditionBar good={data.kpi.good} fair={data.kpi.fair} bad={data.kpi.bad} fullLabel />
         </StatCard>
         <StatCard label="Last verification" value="14 Mar 2025" caption="by Ama Mensah" />
+      </div>
+
+      <div className="mb-[22px] grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="border-b border-border px-5 py-3.5 font-heading text-sm font-semibold">
+            Condition distribution
+          </div>
+          <div className="min-w-0 px-5 py-4">
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: "Good", key: "good", value: data.kpi.good },
+                    { name: "Fair", key: "fair", value: data.kpi.fair },
+                    { name: "Bad", key: "bad", value: data.kpi.bad },
+                  ]}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={45}
+                  outerRadius={75}
+                  paddingAngle={2}
+                >
+                  {(["good", "fair", "bad"] as const).map((key) => (
+                    <Cell key={key} fill={conditionColors[key]} stroke="none" />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="border-b border-border px-5 py-3.5 font-heading text-sm font-semibold">
+            Units by category
+          </div>
+          <div className="px-2 py-4">
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={data.byCategory}>
+                <XAxis dataKey="category" fontSize={11} tickLine={false} axisLine={false} interval={0} angle={-20} textAnchor="end" height={50} />
+                <YAxis fontSize={11} tickLine={false} axisLine={false} width={30} />
+                <Tooltip />
+                <Bar dataKey="count" fill="#123C7A" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[1.4fr_1fr]">

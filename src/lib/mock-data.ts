@@ -1,9 +1,15 @@
 import type {
+  ActivityLogEntry,
   Asset,
   CategoryOption,
+  Department,
+  DisposalRecord,
   Location,
+  MaintenanceRecord,
   Org,
   OrgUser,
+  PendingInvite,
+  Transfer,
   VerificationCycle,
 } from "@/types/asset-platform";
 
@@ -100,13 +106,108 @@ export const mockCategoryDictionary: CategoryOption[] = Object.entries(itemsByCa
 );
 
 export const mockUsers: OrgUser[] = [
-  { id: "user-1", name: "Ama Mensah", email: "ama@cornerstonefcc.org", role: "admin", lastActive: "Today" },
-  { id: "user-2", name: "Kwabena Osei", email: "kwabena@cornerstonefcc.org", role: "asset_manager", lastActive: "Yesterday" },
-  { id: "user-3", name: "Efua Boateng", email: "efua@cornerstonefcc.org", role: "viewer", lastActive: "3 days ago" },
+  { id: "user-1", name: "Ama Mensah", email: "ama@cornerstonefcc.org", role: "admin", isActive: true, lastActive: "Today" },
+  { id: "user-2", name: "Kwabena Osei", email: "kwabena@cornerstonefcc.org", role: "asset_manager", isActive: true, lastActive: "Yesterday" },
+  { id: "user-3", name: "Efua Boateng", email: "efua@cornerstonefcc.org", role: "viewer", isActive: true, lastActive: "3 days ago" },
+  { id: "user-4", name: "Yaw Darko", email: "yaw@cornerstonefcc.org", role: "viewer", isActive: false, lastActive: "2 months ago" },
+];
+
+export const mockPendingInvites: PendingInvite[] = [
+  { id: "invite-1", email: "abena@cornerstonefcc.org", role: "asset_manager", createdAt: "2 days ago" },
 ];
 
 export const mockVerificationCycles: VerificationCycle[] = [
   { id: "cycle-1", date: "14 Mar 2025", runBy: "Ama Mensah", locationsLabel: "All locations", discrepancies: 12 },
   { id: "cycle-2", date: "02 Sep 2024", runBy: "Kwabena Osei", locationsLabel: "Agbogba, East Legon", discrepancies: 5 },
   { id: "cycle-3", date: "18 Mar 2024", runBy: "Ama Mensah", locationsLabel: "All locations", discrepancies: 21 },
+];
+
+const departmentNamesByLocation: Record<string, string[]> = {
+  "loc-agb": ["Sanctuary Ops", "Media & Sound", "Facilities"],
+  "loc-elg": ["Sanctuary Ops", "Children's Ministry"],
+  "loc-spx": ["Facilities", "Media & Sound"],
+  "loc-tem": ["Sanctuary Ops"],
+  "loc-ksi": ["Facilities"],
+  "loc-obn": ["Sanctuary Ops"],
+  "loc-tak": ["Facilities"],
+};
+
+export const mockDepartments: Department[] = mockLocations.flatMap((location) =>
+  (departmentNamesByLocation[location.id] ?? []).map((name, i) => ({
+    id: `dept-${location.id}-${i}`,
+    name,
+    code: `${locCode(location.name)}-${name.slice(0, 2).toUpperCase()}`,
+    locationId: location.id,
+    locationName: location.name,
+    isActive: true,
+    createdAt: location.createdAt,
+  })),
+);
+
+function pick<T>(arr: T[], seed: number): T {
+  return arr[seed % arr.length];
+}
+
+export const mockTransfers: Transfer[] = mockAssets.slice(0, 6).map((asset, i) => {
+  const fromLocation = mockLocations.find((l) => l.id === asset.locationId)!;
+  const toLocation = pick(mockLocations.filter((l) => l.id !== fromLocation.id), i);
+  return {
+    id: `transfer-${i + 1}`,
+    code: `TRF-${String(i + 1).padStart(4, "0")}`,
+    assetId: asset.id,
+    assetDescription: asset.description,
+    assetCode: asset.code,
+    fromLocationId: fromLocation.id,
+    fromLocationName: fromLocation.name,
+    toLocationId: toLocation.id,
+    toLocationName: toLocation.name,
+    reason: pick(["Branch relocation", "Program requirement", "Damaged in place, sending for repair", "Consolidating inventory"], i),
+    status: pick(["pending", "completed", "completed", "cancelled"], i),
+    requestedBy: pick(["Ama Mensah", "Kwabena Osei"], i),
+    createdAt: pick(["Today", "Yesterday", "3 days ago", "1 week ago"], i),
+  };
+});
+
+export const mockMaintenanceRecords: MaintenanceRecord[] = mockAssets
+  .filter((a) => a.bad > 0)
+  .slice(0, 6)
+  .map((asset, i) => ({
+    id: `maint-${i + 1}`,
+    code: `MNT-${String(i + 1).padStart(4, "0")}`,
+    assetId: asset.id,
+    assetDescription: asset.description,
+    assetCode: asset.code,
+    type: pick(["corrective", "preventive"], i),
+    priority: pick(["high", "medium", "low"], i),
+    description: `${asset.bad} unit(s) reported in bad condition — needs inspection.`,
+    scheduledDate: pick(["2025-04-02", "2025-04-10", "2025-04-18"], i),
+    estimatedHours: pick([2, 4, null, 1], i),
+    status: pick(["scheduled", "in_progress", "completed"], i),
+  }));
+
+export const mockDisposalRecords: DisposalRecord[] = mockAssets
+  .filter((a) => a.bad > 2)
+  .slice(0, 4)
+  .map((asset, i) => ({
+    id: `disp-${i + 1}`,
+    code: `DSP-${String(i + 1).padStart(4, "0")}`,
+    assetId: asset.id,
+    assetDescription: asset.description,
+    assetCode: asset.code,
+    method: pick(["scrapped", "written_off", "sold", "donated"], i),
+    reason: "Beyond economical repair",
+    proceeds: pick([null, null, 150, 0], i),
+    status: pick(["pending_approval", "approved", "completed"], i),
+    requestedBy: pick(["Ama Mensah", "Kwabena Osei"], i),
+    requestedAt: pick(["Today", "3 days ago", "2 weeks ago"], i),
+  }));
+
+export const mockActivityLog: ActivityLogEntry[] = [
+  { id: "act-1", occurredAt: "2 hours ago", userName: "Kwabena Osei", action: "import.completed", entityType: "import", description: "Uploaded register.xlsx — 412 assets imported to Agbogba", status: "success" },
+  { id: "act-2", occurredAt: "Yesterday", userName: "Ama Mensah", action: "verification.completed", entityType: "verification", description: "Verification completed for East Legon — 2 discrepancies", status: "success" },
+  { id: "act-3", occurredAt: "2 days ago", userName: "Ama Mensah", action: "asset.updated", entityType: "asset", description: "Ceiling fan CFAN/0042 condition updated", status: "success" },
+  { id: "act-4", occurredAt: "3 days ago", userName: "Efua Boateng", action: "transfer.requested", entityType: "transfer", description: "Requested transfer of Projector PROJ/0031 to Spintex", status: "success" },
+  { id: "act-5", occurredAt: "1 week ago", userName: "Ama Mensah", action: "location.created", entityType: "location", description: "Spintex location added", status: "success" },
+  { id: "act-6", occurredAt: "1 week ago", userName: "Kwabena Osei", action: "user.invited", entityType: "user", description: "Invited abena@cornerstonefcc.org as Asset manager", status: "success" },
+  { id: "act-7", occurredAt: "2 weeks ago", userName: "Kwabena Osei", action: "import.failed", entityType: "import", description: "Upload of stale-register.csv failed — no data rows found under the header", status: "failed" },
 ];

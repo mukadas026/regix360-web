@@ -1,12 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import type { ColumnDef } from "@tanstack/react-table";
-import { toast } from "sonner";
-import { getOrg, getOrgUsers } from "@/api";
-import type { OrgUser } from "@/types/asset-platform";
-import { DataTable, createSortableHeader } from "@/components/global/data-table";
+import { getOrg } from "@/api";
 import { PageContainer } from "@/components/global/page-container";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,40 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/providers/session-provider";
 
-const roleLabels = { admin: "Admin", asset_manager: "Asset manager", viewer: "Viewer" };
-
 export default function SettingsPage() {
   const { isAdmin } = useSession();
   const { data: org } = useQuery({ queryKey: getOrg.key, queryFn: getOrg.fn });
-  const { data: users, isPending: usersPending } = useQuery({
-    queryKey: getOrgUsers.key,
-    queryFn: getOrgUsers.fn,
-    enabled: isAdmin,
-  });
-
-  const columns = useMemo<ColumnDef<OrgUser>[]>(
-    () => [
-      {
-        accessorKey: "name",
-        header: createSortableHeader("Name"),
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-[26px] items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
-              {row.original.name
-                .split(" ")
-                .map((n) => n[0])
-                .join("")}
-            </span>
-            {row.original.name}
-          </div>
-        ),
-      },
-      { accessorKey: "email", header: "Email", cell: ({ row }) => <span className="text-muted-foreground">{row.original.email}</span> },
-      { accessorKey: "role", header: "Role", cell: ({ row }) => roleLabels[row.original.role] },
-      { accessorKey: "lastActive", header: "Last active", cell: ({ row }) => <span className="text-[12.5px] text-muted-foreground">{row.original.lastActive}</span> },
-    ],
-    [],
-  );
 
   return (
     <PageContainer>
@@ -78,16 +43,14 @@ export default function SettingsPage() {
       </div>
 
       {isAdmin && (
-        <div>
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-              Users &amp; roles
-            </div>
-            <Button variant="outline" size="sm" onClick={() => toast("Invite user — not wired up yet")}>
-              Invite user
-            </Button>
+        <div className="flex items-center justify-between rounded-xl border border-border bg-card px-6 py-[18px]">
+          <div>
+            <div className="text-[13.5px] font-medium">Users &amp; roles</div>
+            <p className="text-xs text-muted-foreground">Manage members, roles, and pending invites.</p>
           </div>
-          <DataTable data={users ?? []} columns={columns} isLoading={usersPending} pageSize={20} />
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/users">Go to Users →</Link>
+          </Button>
         </div>
       )}
     </PageContainer>

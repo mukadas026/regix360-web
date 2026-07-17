@@ -1,10 +1,11 @@
 "use client";
 
-import { Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
+import { Eye, Pencil, Printer, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { getAssets, getLocations } from "@/api";
 import type { AssetFilters } from "@/api/assets";
@@ -14,7 +15,7 @@ import { ConditionBar } from "@/components/global/condition-bar";
 import { DataTable, createSortableHeader } from "@/components/global/data-table";
 import { AssetDetailSheet } from "@/components/global/asset-detail-sheet";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { ContextMenuItem } from "@/components/ui/context-menu";
 import { useSession } from "@/providers/session-provider";
 import { mockAssets } from "@/lib/mock-data";
 
@@ -24,7 +25,6 @@ function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { canEdit } = useSession();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const search = searchParams.get("search") ?? "";
   const locationId = searchParams.get("location") ?? "";
@@ -65,20 +65,6 @@ function RegisterContent() {
   }
 
   const rows = data?.rows ?? [];
-  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
-
-  const toggleAll = useCallback(() => {
-    setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)));
-  }, [allSelected, rows]);
-
-  function toggleRow(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
 
   const countText = useMemo(() => {
     if (!data) return "";
@@ -87,21 +73,8 @@ function RegisterContent() {
       : `${data.filteredTotal.toLocaleString()} of ${data.total.toLocaleString()} assets`;
   }, [data]);
 
-  const columns = useMemo<ColumnDef<Asset>[]>(
+  const columns = useMemo<ColumnDef<Asset, unknown>[]>(
     () => [
-      {
-        id: "select",
-        header: () => (
-          <Checkbox checked={allSelected} onCheckedChange={toggleAll} onClick={(e) => e.stopPropagation()} />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            checked={selected.has(row.original.id)}
-            onCheckedChange={() => toggleRow(row.original.id)}
-            onClick={(e) => e.stopPropagation()}
-          />
-        ),
-      },
       {
         accessorKey: "description",
         header: createSortableHeader("Asset"),
@@ -147,8 +120,24 @@ function RegisterContent() {
         header: () => <div className="text-right">Updated</div>,
         cell: ({ row }) => <div className="text-right text-xs text-muted-foreground">{row.original.updatedAt}</div>,
       },
+      {
+        id: "actions",
+        header: "",
+        cell: ({ row }) => (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(`/labels/${row.original.id}`, "_blank");
+            }}
+            title="Print label"
+            className="text-muted-foreground/50 hover:text-foreground"
+          >
+            <QrCode size={15} />
+          </button>
+        ),
+      },
     ],
-    [selected, allSelected, toggleAll],
+    [],
   );
 
   return (
@@ -233,7 +222,8 @@ function RegisterContent() {
           columns={columns}
           isLoading={isPending}
           onRowClick={(row) => openAsset(row.id)}
-          rowClassName={(row) => (selected.has(row.id) ? "bg-accent/30" : "")}
+          getRowId={(row) => row.id}
+          enableSelection
           pageSize={20}
           emptyTitle="No assets match these filters"
           emptyAction={
@@ -241,34 +231,48 @@ function RegisterContent() {
               Clear filters
             </button>
           }
+          rowContextMenu={(asset) => (
+            <>
+              <ContextMenuItem onClick={() => openAsset(asset.id)}>
+                <Eye /> View details
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => window.open(`/labels/${asset.id}`, "_blank")}>
+                <Printer /> Print label
+              </ContextMenuItem>
+              {canEdit && (
+                <ContextMenuItem onClick={() => toast("Edit — not wired up yet")}>
+                  <Pencil /> Edit
+                </ContextMenuItem>
+              )}
+            </>
+          )}
+          bulkActions={(selectedRows, clear) => (
+            <>
+              {["Change condition", "Move to location", "Export selected"].map((label) => (
+                <button
+                  key={label}
+                  onClick={() => {
+                    toast(`${label} — not wired up yet (${selectedRows.length} selected)`);
+                    clear();
+                  }}
+                  className="rounded-lg bg-white/10 px-3 py-1.5 text-[13px] font-medium whitespace-nowrap"
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  toast("Delete — not wired up yet");
+                  clear();
+                }}
+                className="rounded-lg bg-status-bad/90 px-3 py-1.5 text-[13px] font-medium whitespace-nowrap"
+              >
+                Delete
+              </button>
+            </>
+          )}
         />
       </div>
-
-      {selected.size > 0 && (
-        <div className="absolute bottom-[22px] left-1/2 z-20 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-4 overflow-x-auto rounded-xl bg-foreground py-2.5 pr-3 pl-[18px] text-white shadow-lg">
-          <span className="flex-none font-mono text-[13px]">{selected.size} selected</span>
-          <div className="flex flex-none gap-1.5">
-            {["Change condition", "Move to location", "Export selected"].map((label) => (
-              <button
-                key={label}
-                onClick={() => toast(`${label} — not wired up yet`)}
-                className="rounded-lg bg-white/10 px-3 py-1.5 text-[13px] font-medium whitespace-nowrap"
-              >
-                {label}
-              </button>
-            ))}
-            <button
-              onClick={() => toast("Delete — not wired up yet")}
-              className="rounded-lg bg-status-bad/90 px-3 py-1.5 text-[13px] font-medium whitespace-nowrap"
-            >
-              Delete
-            </button>
-          </div>
-          <button onClick={() => setSelected(new Set())} className="flex-none px-1 text-lg text-muted-foreground">
-            ×
-          </button>
-        </div>
-      )}
 
       <AssetDetailSheet assetId={activeAssetId} onClose={closeAsset} />
     </div>

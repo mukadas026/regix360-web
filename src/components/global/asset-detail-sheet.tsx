@@ -101,23 +101,28 @@ export function AssetDetailSheet({ assetId, onClose }: { assetId: string | null;
               )}
             </div>
 
-            {canEdit && (
-              <div className="flex flex-none gap-2 border-t border-border p-3.5">
-                <Button variant="outline" className="flex-1" onClick={() => toast("Edit — not wired up yet")}>
-                  Edit
-                </Button>
-                <Button variant="outline" className="flex-1" onClick={() => toast("Adjust condition — not wired up yet")}>
-                  Adjust condition
-                </Button>
-                <Button
-                  variant="outline"
-                  className="text-status-bad"
-                  onClick={() => toast("Delete — not wired up yet")}
-                >
-                  Delete
-                </Button>
-              </div>
-            )}
+            <div className="flex flex-none gap-2 border-t border-border p-3.5">
+              <Button variant="outline" className="flex-1" onClick={() => window.open(`/labels/${asset.id}`, "_blank")}>
+                Print label
+              </Button>
+              {canEdit && (
+                <>
+                  <Button variant="outline" className="flex-1" onClick={() => toast("Edit — not wired up yet")}>
+                    Edit
+                  </Button>
+                  <Button variant="outline" className="flex-1" onClick={() => toast("Adjust condition — not wired up yet")}>
+                    Adjust condition
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-status-bad"
+                    onClick={() => toast("Delete — not wired up yet")}
+                  >
+                    Delete
+                  </Button>
+                </>
+              )}
+            </div>
           </>
         )}
       </SheetContent>
