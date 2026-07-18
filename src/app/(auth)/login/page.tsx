@@ -31,15 +31,13 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen">
-      <div className="hidden flex-1 items-center justify-center bg-secondary lg:flex">
-        <Image
-          src="/login-splash.png"
-          alt=""
-          width={2016}
-          height={1260}
-          className="h-full w-full object-cover"
-          priority
-        />
+      <div className="relative hidden flex-1 lg:flex">
+        <Image src="/login-splash.png" alt="" fill priority className="object-cover" />
+        <div className="absolute inset-x-0 top-10 flex justify-center">
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-white shadow-lg">
+            <Image src="/logo-icon.png" alt="" width={44} height={44} />
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-1 items-center justify-center bg-secondary p-6 lg:bg-background">
