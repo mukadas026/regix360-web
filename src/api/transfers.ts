@@ -1,40 +1,82 @@
-import { mockAssets, mockLocations, mockTransfers } from "@/lib/mock-data";
-import type { Transfer } from "@/types/asset-platform";
-import { delay } from "./mock";
+import { client, throwError } from "./client";
+import type { Transfer, TransferStatus } from "@/types/asset-platform";
+
+export type TransferFilters = {
+  status?: TransferStatus;
+  assetId?: string;
+  locationId?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export type TransferListResult = {
+  transfers: Transfer[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
 
 export const getTransfers = {
-  key: ["transfers"] as const,
-  fn: async () => delay(mockTransfers),
+  key: (filters: TransferFilters = {}) => ["transfers", filters] as const,
+  fn: async (filters: TransferFilters = {}): Promise<TransferListResult> => {
+    try {
+      const res = await client.get<TransferListResult>("/api/transfers", { params: filters });
+      return res.data;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
+
+export const getTransfer = {
+  key: (id: string) => ["transfer", id] as const,
+  fn: async (id: string): Promise<Transfer> => {
+    try {
+      const res = await client.get<{ transfer: Transfer }>(`/api/transfers/${id}`);
+      return res.data.transfer;
+    } catch (error) {
+      throwError(error);
+    }
+  },
 };
 
 export type InitiateTransferInput = {
   assetId: string;
   toLocationId: string;
-  reason: string;
+  toDepartmentId: string;
+  toCustodianId?: string | null;
+  reason?: string;
 };
 
 export const initiateTransfer = {
-  fn: async (input: InitiateTransferInput) => {
-    const asset = mockAssets.find((a) => a.id === input.assetId);
-    const toLocation = mockLocations.find((l) => l.id === input.toLocationId);
-    if (!asset || !toLocation) throw { name: "ApiError", message: "Select an asset and a destination location." };
+  fn: async (input: InitiateTransferInput): Promise<Transfer> => {
+    try {
+      const res = await client.post<{ transfer: Transfer }>("/api/transfers", input);
+      return res.data.transfer;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
 
-    const transfer: Transfer = {
-      id: `transfer-${mockTransfers.length + 1}`,
-      code: `TRF-${String(mockTransfers.length + 1).padStart(4, "0")}`,
-      assetId: asset.id,
-      assetDescription: asset.description,
-      assetCode: asset.code,
-      fromLocationId: asset.locationId,
-      fromLocationName: asset.locationName,
-      toLocationId: toLocation.id,
-      toLocationName: toLocation.name,
-      reason: input.reason,
-      status: "pending",
-      requestedBy: "Ama Mensah",
-      createdAt: "Just now",
-    };
-    mockTransfers.unshift(transfer);
-    return delay(transfer);
+export const completeTransfer = {
+  fn: async (id: string): Promise<Transfer> => {
+    try {
+      const res = await client.post<{ transfer: Transfer }>(`/api/transfers/${id}/complete`);
+      return res.data.transfer;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
+
+export const cancelTransfer = {
+  fn: async (id: string): Promise<Transfer> => {
+    try {
+      const res = await client.post<{ transfer: Transfer }>(`/api/transfers/${id}/cancel`);
+      return res.data.transfer;
+    } catch (error) {
+      throwError(error);
+    }
   },
 };

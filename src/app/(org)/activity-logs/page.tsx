@@ -7,22 +7,19 @@ import { getActivityLog } from "@/api";
 import type { ActivityLogEntry } from "@/types/asset-platform";
 import { DataTable, createSortableHeader } from "@/components/global/data-table";
 import { PageContainer } from "@/components/global/page-container";
-import { Badge } from "@/components/ui/badge";
 
-const entityLabels: Record<ActivityLogEntry["entityType"], string> = {
-  asset: "Asset",
-  location: "Location",
-  department: "Department",
-  user: "User",
-  transfer: "Transfer",
-  maintenance: "Maintenance",
-  disposal: "Disposal",
-  verification: "Verification",
-  import: "Import",
-};
+function formatTimestamp(value: string) {
+  return new Date(value).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function ActivityLogsPage() {
-  const { data: entries, isPending } = useQuery({ queryKey: getActivityLog.key, queryFn: getActivityLog.fn });
+  const { data: entries, isPending } = useQuery({ queryKey: getActivityLog.key, queryFn: () => getActivityLog.fn() });
 
   const [search, setSearch] = useState("");
 
@@ -36,10 +33,23 @@ export default function ActivityLogsPage() {
     [entries],
   );
 
+  const targetTypeOptions = useMemo(
+    () => Array.from(new Set((entries ?? []).map((e) => e.target_type))).map((t) => ({ label: t, value: t })),
+    [entries],
+  );
+
   const columns = useMemo<ColumnDef<ActivityLogEntry>[]>(
     () => [
-      { accessorKey: "occurredAt", header: createSortableHeader("Timestamp"), cell: ({ row }) => <span className="text-[12.5px] text-muted-foreground">{row.original.occurredAt}</span> },
-      { accessorKey: "userName", header: "User", cell: ({ row }) => <span className="text-[13.5px] font-medium">{row.original.userName}</span> },
+      {
+        accessorKey: "occurred_at",
+        header: createSortableHeader("Timestamp"),
+        cell: ({ row }) => <span className="text-[12.5px] text-muted-foreground">{formatTimestamp(row.original.occurred_at)}</span>,
+      },
+      {
+        accessorKey: "actor_name",
+        header: "User",
+        cell: ({ row }) => <span className="text-[13.5px] font-medium">{row.original.actor_name}</span>,
+      },
       {
         accessorKey: "action",
         header: "Action",
@@ -47,35 +57,18 @@ export default function ActivityLogsPage() {
         cell: ({ row }) => <span className="font-mono text-[12.5px]">{row.original.action}</span>,
       },
       {
-        accessorKey: "entityType",
-        header: "Entity Type",
-        meta: {
-          filter: {
-            type: "select",
-            options: Object.entries(entityLabels).map(([value, label]) => ({ label, value })),
-          },
-        },
-        cell: ({ row }) => <span className="text-[13px]">{entityLabels[row.original.entityType]}</span>,
+        accessorKey: "target_type",
+        header: "Target Type",
+        meta: { filter: { type: "select", options: targetTypeOptions } },
+        cell: ({ row }) => <span className="text-[13px] capitalize">{row.original.target_type}</span>,
       },
-      { accessorKey: "description", header: "Description", cell: ({ row }) => <span className="text-[13px] text-muted-foreground">{row.original.description}</span> },
       {
-        accessorKey: "status",
-        header: "Status",
-        meta: {
-          filter: {
-            type: "select",
-            options: [
-              { label: "Success", value: "success" },
-              { label: "Failed", value: "failed" },
-            ],
-          },
-        },
-        cell: ({ row }) => (
-          <Badge variant={row.original.status === "success" ? "secondary" : "destructive"}>{row.original.status}</Badge>
-        ),
+        accessorKey: "description",
+        header: "Description",
+        cell: ({ row }) => <span className="text-[13px] text-muted-foreground">{row.original.description}</span>,
       },
     ],
-    [actionOptions],
+    [actionOptions, targetTypeOptions],
   );
 
   return (

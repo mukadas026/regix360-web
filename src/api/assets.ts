@@ -1,84 +1,159 @@
-import { mockAssets, mockCategoryDictionary, mockLocations } from "@/lib/mock-data";
-import type { Asset } from "@/types/asset-platform";
-import { delay } from "./mock";
+import { client, throwError } from "./client";
+import type {
+  AssetDetail,
+  AssetGroup,
+  AssetStatus,
+  AssetUnit,
+  Condition,
+  CreateAssetSummary,
+} from "@/types/asset-platform";
+
+export type AssetSort = "updated" | "code" | "description" | "qty";
 
 export type AssetFilters = {
   search?: string;
-  locationId?: string;
-  category?: string;
-  condition?: "good" | "fair" | "bad";
+  locationIds?: string[];
+  departmentIds?: string[];
+  categoryIds?: string[];
+  conditions?: Condition[];
+  sort?: AssetSort;
+  page?: number;
+  pageSize?: number;
 };
 
-function matchesFilters(asset: Asset, filters: AssetFilters) {
-  if (filters.search) {
-    const q = filters.search.toLowerCase();
-    if (!asset.description.toLowerCase().includes(q) && !asset.code.toLowerCase().includes(q)) return false;
-  }
-  if (filters.locationId && asset.locationId !== filters.locationId) return false;
-  if (filters.category && asset.category !== filters.category) return false;
-  if (filters.condition) {
-    const dominant = (["good", "fair", "bad"] as const).reduce((a, b) => (asset[b] > asset[a] ? b : a), "good");
-    if (dominant !== filters.condition) return false;
-  }
-  return true;
-}
+export type AssetsResponse = {
+  groups: AssetGroup[];
+  filteredGroups: number;
+  filteredUnits: number;
+  totalUnits: number;
+  page: number;
+  pageSize: number;
+};
 
 export const getAssets = {
-  key: (filters: AssetFilters) => ["assets", filters] as const,
+  key: (filters: AssetFilters = {}) => ["assets", filters] as const,
   fn: async (filters: AssetFilters = {}) => {
-    const rows = mockAssets.filter((asset) => matchesFilters(asset, filters));
-    return delay({ rows, total: mockAssets.length, filteredTotal: rows.length });
+    try {
+      const res = await client.get<AssetsResponse>("/api/assets", {
+        params: {
+          search: filters.search || undefined,
+          locationIds: filters.locationIds?.length ? filters.locationIds.join(",") : undefined,
+          departmentIds: filters.departmentIds?.length ? filters.departmentIds.join(",") : undefined,
+          categoryIds: filters.categoryIds?.length ? filters.categoryIds.join(",") : undefined,
+          conditions: filters.conditions?.length ? filters.conditions.join(",") : undefined,
+          sort: filters.sort,
+          page: filters.page,
+          pageSize: filters.pageSize,
+        },
+      });
+      return res.data;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
+
+export type AssetUnitsQuery = {
+  description: string;
+  categoryItemId: string;
+  locationId: string;
+  departmentId: string;
+};
+
+export const getAssetUnits = {
+  key: (query: AssetUnitsQuery) => ["asset-units", query] as const,
+  fn: async (query: AssetUnitsQuery) => {
+    try {
+      const res = await client.get<{ units: AssetUnit[] }>("/api/assets/units", { params: query });
+      return res.data.units;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
+
+export type AddAssetInput = {
+  description: string;
+  categoryItemId: string;
+  locationId: string;
+  departmentId: string;
+  good: number;
+  fair: number;
+  bad: number;
+  manufacturer?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  supplier?: string | null;
+  acquisitionMethod: "purchase" | "donation" | "transfer" | "other";
+  acquisitionDate?: string | null;
+  acquisitionCost?: number | null;
+  customCode?: string | null;
+  notes?: string | null;
+};
+
+export const addAsset = {
+  fn: async (input: AddAssetInput) => {
+    try {
+      const res = await client.post<CreateAssetSummary>("/api/assets", input);
+      return res.data;
+    } catch (error) {
+      throwError(error);
+    }
   },
 };
 
 export const getAsset = {
   key: (id: string) => ["asset", id] as const,
   fn: async (id: string) => {
-    const asset = mockAssets.find((a) => a.id === id) ?? null;
-    return delay(asset);
+    try {
+      const res = await client.get<AssetDetail>(`/api/assets/${id}`);
+      return res.data;
+    } catch (error) {
+      throwError(error);
+    }
   },
 };
 
-export const getCategoryDictionary = {
-  key: ["categoryDictionary"] as const,
-  fn: async () => delay(mockCategoryDictionary),
-};
-
-export type AddAssetInput = {
+export type UpdateAssetInput = Partial<{
   description: string;
-  locationId: string;
-  good: number;
-  fair: number;
-  bad: number;
-  makeModel: string | null;
+  condition: Condition;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
   supplier: string | null;
+  acquisitionMethod: "purchase" | "donation" | "transfer" | "other";
+  acquisitionDate: string | null;
+  acquisitionCost: number | null;
+  status: AssetStatus;
+  custodianId: string | null;
+  customCode: string | null;
+  notes: string | null;
+}>;
+
+export type UpdateAssetResult = {
+  id: string;
+  description: string;
+  code: string;
+  condition: Condition;
+  manufacturer: string | null;
+  model: string | null;
+  serial_number: string | null;
+  supplier: string | null;
+  acquisition_method: "purchase" | "donation" | "transfer" | "other";
+  acquisition_date: string | null;
+  acquisition_cost: number | null;
+  status: AssetStatus;
+  custodian_id: string | null;
+  updated_at: string;
 };
 
-export const addAsset = {
-  fn: async (input: AddAssetInput) => {
-    const location = mockLocations.find((l) => l.id === input.locationId);
-    const match = mockCategoryDictionary.find((c) =>
-      input.description.toLowerCase().includes(c.itemCode.toLowerCase()),
-    );
-    const serial = String(mockAssets.length + 1).padStart(4, "0");
-    const code = `CFCC/${location?.name.slice(0, 3).toUpperCase() ?? "ORG"}/${match?.itemCode ?? "ITEM"}/${serial}`;
-    const asset: Asset = {
-      id: `asset-${mockAssets.length + 1}`,
-      code,
-      description: input.description,
-      locationId: input.locationId,
-      locationName: location?.name ?? "",
-      category: match?.category ?? "Uncategorized",
-      good: input.good,
-      fair: input.fair,
-      bad: input.bad,
-      makeModel: input.makeModel,
-      supplier: input.supplier,
-      updatedAt: "Just now",
-      history: [],
-    };
-    mockAssets.unshift(asset);
-    if (location) location.assetCount += 1;
-    return delay(asset);
+export const updateAsset = {
+  fn: async (id: string, input: UpdateAssetInput) => {
+    try {
+      const res = await client.patch<{ asset: UpdateAssetResult }>(`/api/assets/${id}`, input);
+      return res.data.asset;
+    } catch (error) {
+      throwError(error);
+    }
   },
 };

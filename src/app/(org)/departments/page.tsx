@@ -3,12 +3,23 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { toast } from "sonner";
-import { addDepartment, getDepartments, getLocations } from "@/api";
+import { Pencil, Trash2 } from "lucide-react";
+import { toast } from "react-hot-toast";
+import { addDepartment, deleteDepartment, getDepartments, getLocations, updateDepartment } from "@/api";
+import type { ApiError } from "@/api";
 import type { Department } from "@/types/asset-platform";
 import { DataTable, createSortableHeader } from "@/components/global/data-table";
 import { PageContainer } from "@/components/global/page-container";
-import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,7 +36,7 @@ import { useSession } from "@/providers/session-provider";
 export default function DepartmentsPage() {
   const { canEdit } = useSession();
   const queryClient = useQueryClient();
-  const { data: departments, isPending } = useQuery({ queryKey: getDepartments.key, queryFn: getDepartments.fn });
+  const { data: departments, isPending } = useQuery({ queryKey: getDepartments.key(), queryFn: () => getDepartments.fn() });
   const { data: locations } = useQuery({ queryKey: getLocations.key, queryFn: getLocations.fn });
 
   const [search, setSearch] = useState("");
@@ -34,16 +45,39 @@ export default function DepartmentsPage() {
   const [code, setCode] = useState("");
   const [locationId, setLocationId] = useState("");
 
+  const [editing, setEditing] = useState<Department | null>(null);
+  const [editName, setEditName] = useState("");
+
   const { mutate, isPending: isSaving } = useMutation({
     mutationFn: addDepartment.fn,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getDepartments.key });
+      queryClient.invalidateQueries({ queryKey: getDepartments.key() });
       toast("Department added");
       setOpen(false);
       setName("");
       setCode("");
       setLocationId("");
     },
+    onError: (error) => toast((error as ApiError).message ?? "Could not add department."),
+  });
+
+  const { mutate: saveEdit, isPending: isEditSaving } = useMutation({
+    mutationFn: updateDepartment.fn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getDepartments.key() });
+      toast("Department updated");
+      setEditing(null);
+    },
+    onError: (error) => toast((error as ApiError).message ?? "Could not update department."),
+  });
+
+  const { mutate: remove } = useMutation({
+    mutationFn: deleteDepartment.fn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getDepartments.key() });
+      toast("Department deleted");
+    },
+    onError: (error) => toast((error as ApiError).message ?? "Could not delete department."),
   });
 
   const filtered = useMemo(
@@ -52,7 +86,7 @@ export default function DepartmentsPage() {
   );
 
   const locationOptions = useMemo(
-    () => Array.from(new Set((departments ?? []).map((d) => d.locationName))).map((name) => ({ label: name, value: name })),
+    () => Array.from(new Set((departments ?? []).map((d) => d.location_name))).map((name) => ({ label: name, value: name })),
     [departments],
   );
 
@@ -61,33 +95,43 @@ export default function DepartmentsPage() {
       { accessorKey: "code", header: "Code", cell: ({ row }) => <span className="font-mono text-[12.5px]">{row.original.code}</span> },
       { accessorKey: "name", header: createSortableHeader("Name"), cell: ({ row }) => <span className="text-[13.5px] font-medium">{row.original.name}</span> },
       {
-        accessorKey: "locationName",
+        accessorKey: "location_name",
         header: "Location",
         meta: { filter: { type: "select", options: locationOptions } },
-        cell: ({ row }) => <span className="text-[13px] text-muted-foreground">{row.original.locationName}</span>,
+        cell: ({ row }) => <span className="text-[13px] text-muted-foreground">{row.original.location_name}</span>,
       },
       {
-        accessorKey: "isActive",
-        header: "Status",
-        filterFn: (row, columnId, filterValue) => String(row.getValue(columnId)) === filterValue,
-        meta: {
-          filter: {
-            type: "select",
-            options: [
-              { label: "Active", value: "true" },
-              { label: "Inactive", value: "false" },
-            ],
-          },
-        },
-        cell: ({ row }) => (
-          <Badge variant="secondary" className="gap-1.5">
-            <span className="size-1.5 rounded-full bg-status-good" />
-            {row.original.isActive ? "Active" : "Inactive"}
-          </Badge>
-        ),
+        accessorKey: "total_units",
+        header: () => <div className="text-right">Assets</div>,
+        cell: ({ row }) => <div className="text-right font-mono text-[13px]">{row.original.total_units}</div>,
+      },
+      {
+        accessorKey: "created_at",
+        header: "Created",
+        cell: ({ row }) => <span className="font-mono text-[12.5px] text-muted-foreground">{row.original.created_at}</span>,
+      },
+      {
+        id: "actions",
+        header: "",
+        cell: ({ row }) =>
+          canEdit ? (
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditing(row.original);
+                  setEditName(row.original.name);
+                }}
+                className="text-muted-foreground/50 hover:text-foreground"
+              >
+                <Pencil size={15} />
+              </button>
+              <DeleteDepartmentButton department={row.original} onConfirm={() => remove(row.original.id)} />
+            </div>
+          ) : null,
       },
     ],
-    [locationOptions],
+    [canEdit, locationOptions, remove],
   );
 
   return (
@@ -127,8 +171,10 @@ export default function DepartmentsPage() {
                   <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Media & Sound" />
                 </div>
                 <div>
-                  <Label className="mb-1.5 text-[12.5px] font-semibold">Code</Label>
-                  <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. MED" />
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">
+                    Code <span className="font-normal text-muted-foreground">— 2-6 letters/numbers, permanent</span>
+                  </Label>
+                  <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. MED" maxLength={6} />
                 </div>
               </div>
               <DialogFooter>
@@ -157,6 +203,67 @@ export default function DepartmentsPage() {
       </div>
 
       <DataTable data={filtered} columns={columns} isLoading={isPending} pageSize={20} emptyTitle="No departments yet" />
+
+      <Dialog open={editing !== null} onOpenChange={(next) => !next && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit department</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3.5">
+            <div>
+              <Label className="mb-1.5 text-[12.5px] font-semibold">Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div>
+              <Label className="mb-1.5 text-[12.5px] font-semibold">
+                Code <span className="font-normal text-muted-foreground">— permanent</span>
+              </Label>
+              <Input value={editing?.code ?? ""} disabled />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={!editName || isEditSaving}
+              onClick={() => {
+                if (!editing) return;
+                saveEdit({ id: editing.id, name: editName });
+              }}
+            >
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
+  );
+}
+
+function DeleteDepartmentButton({ department, onConfirm }: { department: Department; onConfirm: () => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        className="text-muted-foreground/50 hover:text-status-bad"
+      >
+        <Trash2 size={15} />
+      </button>
+      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete {department.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This can&apos;t be undone. Departments holding asset lines can&apos;t be deleted — move them first.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Delete</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

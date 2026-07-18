@@ -1,50 +1,171 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Eye, Pencil, Printer, QrCode } from "lucide-react";
-import { toast } from "sonner";
-import { getAssets, getLocations } from "@/api";
-import type { AssetFilters } from "@/api/assets";
-import type { Asset } from "@/types/asset-platform";
-import { AssetCodeChip } from "@/components/global/asset-code-chip";
+import { Eye, Layers, Printer } from "lucide-react";
+import { toast } from "react-hot-toast";
+import { client } from "@/api/client";
+import { getAssets, getAssetUnits, getCategories, getLocations } from "@/api";
+import type { AssetFilters, AssetSort, AssetUnitsQuery } from "@/api/assets";
+import type { AssetGroup, AssetUnit, Condition, Department } from "@/types/asset-platform";
 import { ConditionBar } from "@/components/global/condition-bar";
-import { DataTable, createSortableHeader } from "@/components/global/data-table";
+import { DataTable } from "@/components/global/data-table";
 import { AssetDetailSheet } from "@/components/global/asset-detail-sheet";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextMenuItem } from "@/components/ui/context-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/providers/session-provider";
-import { mockAssets } from "@/lib/mock-data";
 
-const categories = Array.from(new Set(mockAssets.map((a) => a.category)));
+const conditionBadgeVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  good: "default",
+  fair: "secondary",
+  bad: "destructive",
+};
+
+function groupKey(group: AssetGroup): AssetUnitsQuery {
+  return {
+    description: group.description,
+    categoryItemId: group.category_item_id,
+    locationId: group.location_id,
+    departmentId: group.department_id,
+  };
+}
+
+function UnitsDrawer({ group, onClose, onSelectUnit }: { group: AssetGroup | null; onClose: () => void; onSelectUnit: (id: string) => void }) {
+  const query = group ? groupKey(group) : null;
+  const { data: units, isPending } = useQuery({
+    queryKey: getAssetUnits.key(query ?? { description: "", categoryItemId: "", locationId: "", departmentId: "" }),
+    queryFn: () => getAssetUnits.fn(query as AssetUnitsQuery),
+    enabled: Boolean(query),
+  });
+
+  return (
+    <Sheet open={Boolean(group)} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="w-[440px] max-w-[92vw] gap-0 p-0 sm:max-w-[92vw]">
+        <SheetHeader className="flex-none gap-1 border-b border-border px-[22px] py-5">
+          <SheetTitle className="font-heading text-lg font-semibold tracking-tight">{group?.description}</SheetTitle>
+          <p className="text-[13px] text-muted-foreground">
+            {group?.location_name} · {group?.department_name}
+          </p>
+        </SheetHeader>
+        <div className="flex-1 overflow-y-auto p-[22px]">
+          {isPending ? (
+            <div className="space-y-2">
+              <Skeleton className="h-11 w-full" />
+              <Skeleton className="h-11 w-full" />
+              <Skeleton className="h-11 w-full" />
+            </div>
+          ) : !units || units.length === 0 ? (
+            <p className="text-[13px] text-muted-foreground">No units found for this group.</p>
+          ) : (
+            <div className="space-y-2">
+              {units.map((unit: AssetUnit) => (
+                <button
+                  key={unit.id}
+                  onClick={() => onSelectUnit(unit.id)}
+                  className="flex w-full items-center justify-between rounded-lg border border-border px-3.5 py-2.5 text-left hover:bg-accent/30"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-mono text-[12.5px] font-medium">{unit.code}</div>
+                    <div className="mt-0.5 text-[11.5px] text-muted-foreground capitalize">{unit.status.replace("_", " ")}</div>
+                  </div>
+                  <Badge variant={conditionBadgeVariant[unit.condition]} className="capitalize">
+                    {unit.condition}
+                  </Badge>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
 
 function RegisterContent() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const { canEdit } = useSession();
+  const [resolving, setResolving] = useState(false);
 
   const search = searchParams.get("search") ?? "";
   const locationId = searchParams.get("location") ?? "";
-  const category = searchParams.get("category") ?? "";
-  const condition = (searchParams.get("condition") as AssetFilters["condition"]) ?? undefined;
+  const departmentId = searchParams.get("department") ?? "";
+  const categoryItemId = searchParams.get("category") ?? "";
+  const condition = searchParams.get("condition") ?? "";
+  const sort = (searchParams.get("sort") as AssetSort) || "updated";
+  const page = Number(searchParams.get("page") ?? "1") || 1;
   const activeAssetId = searchParams.get("asset");
 
-  const filters: AssetFilters = { search: search || undefined, locationId: locationId || undefined, category: category || undefined, condition };
-  const filtersActive = Boolean(search || locationId || category || condition);
+  const activeGroupDesc = searchParams.get("gd");
+  const activeGroupCat = searchParams.get("gc");
+  const activeGroupLoc = searchParams.get("gl");
+  const activeGroupDept = searchParams.get("gp");
+
+  const filters: AssetFilters = {
+    search: search || undefined,
+    locationIds: locationId ? [locationId] : undefined,
+    departmentIds: departmentId ? [departmentId] : undefined,
+    categoryIds: categoryItemId ? [categoryItemId] : undefined,
+    conditions: condition ? [condition as Condition] : undefined,
+    sort,
+    page,
+    pageSize: 50,
+  };
+  const filtersActive = Boolean(search || locationId || departmentId || categoryItemId || condition);
 
   const { data: locationsData } = useQuery({ queryKey: getLocations.key, queryFn: getLocations.fn });
+  const { data: departmentsData } = useQuery({
+    queryKey: ["departments", "all"],
+    queryFn: async () => {
+      const res = await client.get<{ departments: Department[] }>("/api/departments");
+      return res.data.departments;
+    },
+  });
+  const { data: categoriesData } = useQuery({ queryKey: getCategories.key(""), queryFn: () => getCategories.fn("") });
   const { data, isPending } = useQuery({
     queryKey: getAssets.key(filters),
     queryFn: () => getAssets.fn(filters),
   });
 
+  const activeGroup = useMemo<AssetGroup | null>(() => {
+    if (!activeGroupDesc || !activeGroupCat || !activeGroupLoc || !activeGroupDept || !data) return null;
+    return (
+      data.groups.find(
+        (g) =>
+          g.description === activeGroupDesc &&
+          g.category_item_id === activeGroupCat &&
+          g.location_id === activeGroupLoc &&
+          g.department_id === activeGroupDept,
+      ) ?? {
+        description: activeGroupDesc,
+        category_item_id: activeGroupCat,
+        category: "",
+        item_code: "",
+        location_id: activeGroupLoc,
+        location_name: "",
+        department_id: activeGroupDept,
+        department_name: "",
+        unit_count: 0,
+        good_count: 0,
+        fair_count: 0,
+        bad_count: 0,
+        updated_at: "",
+      }
+    );
+  }, [activeGroupDesc, activeGroupCat, activeGroupLoc, activeGroupDept, data]);
+
   function updateParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value);
     else params.delete(key);
+    if (key !== "page") params.delete("page");
     router.push(`/assets?${params.toString()}`);
   }
 
@@ -55,6 +176,10 @@ function RegisterContent() {
   function openAsset(id: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("asset", id);
+    params.delete("gd");
+    params.delete("gc");
+    params.delete("gl");
+    params.delete("gp");
     router.push(`/assets?${params.toString()}`);
   }
 
@@ -64,31 +189,80 @@ function RegisterContent() {
     router.push(`/assets?${params.toString()}`);
   }
 
-  const rows = data?.rows ?? [];
+  function openGroupDrawer(group: AssetGroup) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("gd", group.description);
+    params.set("gc", group.category_item_id);
+    params.set("gl", group.location_id);
+    params.set("gp", group.department_id);
+    router.push(`/assets?${params.toString()}`);
+  }
+
+  function closeGroupDrawer() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("gd");
+    params.delete("gc");
+    params.delete("gl");
+    params.delete("gp");
+    router.push(`/assets?${params.toString()}`);
+  }
+
+  async function handleRowClick(group: AssetGroup) {
+    if (resolving) return;
+    if (group.unit_count === 1) {
+      setResolving(true);
+      try {
+        const units = await queryClient.fetchQuery({
+          queryKey: getAssetUnits.key(groupKey(group)),
+          queryFn: () => getAssetUnits.fn(groupKey(group)),
+        });
+        if (units && units[0]) {
+          openAsset(units[0].id);
+          return;
+        }
+      } catch {
+        toast("Couldn't load this asset — try again.");
+      } finally {
+        setResolving(false);
+      }
+    }
+    openGroupDrawer(group);
+  }
+
+  const rows = data?.groups ?? [];
 
   const countText = useMemo(() => {
     if (!data) return "";
-    return data.filteredTotal === data.total
-      ? `${data.total.toLocaleString()} assets`
-      : `${data.filteredTotal.toLocaleString()} of ${data.total.toLocaleString()} assets`;
+    return data.filteredUnits === data.totalUnits
+      ? `${data.totalUnits.toLocaleString()} units`
+      : `${data.filteredUnits.toLocaleString()} of ${data.totalUnits.toLocaleString()} units`;
   }, [data]);
 
-  const columns = useMemo<ColumnDef<Asset, unknown>[]>(
+  const totalPages = data ? Math.max(1, Math.ceil(data.filteredGroups / data.pageSize)) : 1;
+
+  const columns = useMemo<ColumnDef<AssetGroup, unknown>[]>(
     () => [
       {
         accessorKey: "description",
-        header: createSortableHeader("Asset"),
+        header: "Asset",
         cell: ({ row }) => (
           <div className="min-w-0">
             <div className="mb-1 truncate text-[13.5px] font-medium">{row.original.description}</div>
-            <AssetCodeChip code={row.original.code} className="text-[9.5px]" />
+            <span className="rounded-md border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] tracking-[0.04em] text-muted-foreground">
+              {row.original.item_code}
+            </span>
           </div>
         ),
       },
       {
-        accessorKey: "locationName",
-        header: createSortableHeader("Location"),
-        cell: ({ row }) => <span className="text-[13px]">{row.original.locationName}</span>,
+        accessorKey: "location_name",
+        header: "Location",
+        cell: ({ row }) => <span className="text-[13px]">{row.original.location_name}</span>,
+      },
+      {
+        accessorKey: "department_name",
+        header: "Department",
+        cell: ({ row }) => <span className="text-[13px]">{row.original.department_name}</span>,
       },
       {
         accessorKey: "category",
@@ -103,22 +277,29 @@ function RegisterContent() {
         id: "condition",
         header: "Condition",
         cell: ({ row }) => (
-          <ConditionBar good={row.original.good} fair={row.original.fair} bad={row.original.bad} className="w-32" />
+          <ConditionBar
+            good={row.original.good_count}
+            fair={row.original.fair_count}
+            bad={row.original.bad_count}
+            className="w-32"
+          />
         ),
       },
       {
-        id: "qty",
-        header: () => <div className="text-right">Qty</div>,
+        accessorKey: "unit_count",
+        header: () => <div className="text-right">Units</div>,
         cell: ({ row }) => (
-          <div className="text-right font-mono text-[13px] font-medium">
-            {row.original.good + row.original.fair + row.original.bad}
+          <div className="text-right font-mono text-[13px] font-medium">{row.original.unit_count}</div>
+        ),
+      },
+      {
+        accessorKey: "updated_at",
+        header: () => <div className="text-right">Updated</div>,
+        cell: ({ row }) => (
+          <div className="text-right text-xs text-muted-foreground">
+            {row.original.updated_at ? new Date(row.original.updated_at).toLocaleDateString() : "—"}
           </div>
         ),
-      },
-      {
-        accessorKey: "updatedAt",
-        header: () => <div className="text-right">Updated</div>,
-        cell: ({ row }) => <div className="text-right text-xs text-muted-foreground">{row.original.updatedAt}</div>,
       },
       {
         id: "actions",
@@ -127,16 +308,17 @@ function RegisterContent() {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              window.open(`/labels/${row.original.id}`, "_blank");
+              handleRowClick(row.original);
             }}
-            title="Print label"
+            title="View units"
             className="text-muted-foreground/50 hover:text-foreground"
           >
-            <QrCode size={15} />
+            <Layers size={15} />
           </button>
         ),
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -185,20 +367,33 @@ function RegisterContent() {
           </select>
 
           <select
-            value={category}
-            onChange={(e) => updateParam("category", e.target.value)}
+            value={departmentId}
+            onChange={(e) => updateParam("department", e.target.value)}
             className="h-9 rounded-lg border border-input bg-card px-3 text-[13px] font-medium"
           >
-            <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            <option value="">All departments</option>
+            {departmentsData?.map((dept) => (
+              <option key={dept.id} value={dept.id}>
+                {dept.name}
               </option>
             ))}
           </select>
 
           <select
-            value={condition ?? ""}
+            value={categoryItemId}
+            onChange={(e) => updateParam("category", e.target.value)}
+            className="h-9 rounded-lg border border-input bg-card px-3 text-[13px] font-medium"
+          >
+            <option value="">All categories</option>
+            {categoriesData?.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.item_description}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={condition}
             onChange={(e) => updateParam("condition", e.target.value)}
             className="h-9 rounded-lg border border-input bg-card px-3 text-[13px] font-medium"
           >
@@ -206,6 +401,17 @@ function RegisterContent() {
             <option value="good">Good</option>
             <option value="fair">Fair</option>
             <option value="bad">Bad</option>
+          </select>
+
+          <select
+            value={sort}
+            onChange={(e) => updateParam("sort", e.target.value)}
+            className="h-9 rounded-lg border border-input bg-card px-3 text-[13px] font-medium"
+          >
+            <option value="updated">Sort: recently updated</option>
+            <option value="code">Sort: code</option>
+            <option value="description">Sort: description</option>
+            <option value="qty">Sort: quantity</option>
           </select>
 
           {filtersActive && (
@@ -221,59 +427,53 @@ function RegisterContent() {
           data={rows}
           columns={columns}
           isLoading={isPending}
-          onRowClick={(row) => openAsset(row.id)}
-          getRowId={(row) => row.id}
-          enableSelection
-          pageSize={20}
+          onRowClick={handleRowClick}
+          getRowId={(row) => `${row.description}::${row.category_item_id}::${row.location_id}::${row.department_id}`}
+          pageSize={50}
           emptyTitle="No assets match these filters"
           emptyAction={
             <button onClick={clearFilters} className="text-sm font-semibold text-accent-foreground">
               Clear filters
             </button>
           }
-          rowContextMenu={(asset) => (
+          rowContextMenu={(group) => (
             <>
-              <ContextMenuItem onClick={() => openAsset(asset.id)}>
-                <Eye /> View details
+              <ContextMenuItem onClick={() => handleRowClick(group)}>
+                <Eye /> View units
               </ContextMenuItem>
-              <ContextMenuItem onClick={() => window.open(`/labels/${asset.id}`, "_blank")}>
-                <Printer /> Print label
+              <ContextMenuItem onClick={() => toast("Bulk label printing — not wired up yet")}>
+                <Printer /> Print labels
               </ContextMenuItem>
-              {canEdit && (
-                <ContextMenuItem onClick={() => toast("Edit — not wired up yet")}>
-                  <Pencil /> Edit
-                </ContextMenuItem>
-              )}
-            </>
-          )}
-          bulkActions={(selectedRows, clear) => (
-            <>
-              {["Change condition", "Move to location", "Export selected"].map((label) => (
-                <button
-                  key={label}
-                  onClick={() => {
-                    toast(`${label} — not wired up yet (${selectedRows.length} selected)`);
-                    clear();
-                  }}
-                  className="rounded-lg bg-white/10 px-3 py-1.5 text-[13px] font-medium whitespace-nowrap"
-                >
-                  {label}
-                </button>
-              ))}
-              <button
-                onClick={() => {
-                  toast("Delete — not wired up yet");
-                  clear();
-                }}
-                className="rounded-lg bg-status-bad/90 px-3 py-1.5 text-[13px] font-medium whitespace-nowrap"
-              >
-                Delete
-              </button>
             </>
           )}
         />
+
+        {data && totalPages > 1 && (
+          <div className="mt-3 flex items-center justify-end gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => updateParam("page", String(page - 1))}
+            >
+              Previous
+            </Button>
+            <span className="font-mono text-xs text-muted-foreground">
+              Page {page} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => updateParam("page", String(page + 1))}
+            >
+              Next
+            </Button>
+          </div>
+        )}
       </div>
 
+      <UnitsDrawer group={activeGroup} onClose={closeGroupDrawer} onSelectUnit={openAsset} />
       <AssetDetailSheet assetId={activeAssetId} onClose={closeAsset} />
     </div>
   );

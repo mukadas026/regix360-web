@@ -44,13 +44,17 @@ export default function AssetLabelPage({ params }: { params: Promise<{ id: strin
           </div>
           <div className="flex justify-between gap-3">
             <dt className="font-semibold">Location:</dt>
-            <dd>{asset.locationName}</dd>
+            <dd>
+              {asset.location_name} / {asset.department_name}
+            </dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="font-semibold">Condition:</dt>
-            <dd>
-              {asset.good} good · {asset.fair} fair · {asset.bad} bad
-            </dd>
+            <dd className="capitalize">{asset.condition}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="font-semibold">Status:</dt>
+            <dd className="capitalize">{asset.status.replace("_", " ")}</dd>
           </div>
         </dl>
       </div>

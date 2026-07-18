@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins, Roboto, JetBrains_Mono } from "next/font/google";
 import { QueryProvider } from "@/providers/query-provider";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
 const roboto = Roboto({

@@ -3,9 +3,25 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { toast } from "sonner";
-import { addMaintenance, getAssets, getMaintenanceRecords } from "@/api";
-import type { MaintenancePriority, MaintenanceRecord, MaintenanceStatus, MaintenanceType } from "@/types/asset-platform";
+import { toast } from "react-hot-toast";
+import {
+  addMaintenance,
+  cancelMaintenance,
+  client,
+  completeMaintenance,
+  getMaintenanceRecords,
+  startMaintenance,
+} from "@/api";
+import type {
+  AssetGroup,
+  AssetStatus,
+  AssetUnit,
+  Condition,
+  MaintenancePriority,
+  MaintenanceRecord,
+  MaintenanceStatus,
+  MaintenanceType,
+} from "@/types/asset-platform";
 import { AssetCodeChip } from "@/components/global/asset-code-chip";
 import { DataTable, createSortableHeader } from "@/components/global/data-table";
 import { PageContainer } from "@/components/global/page-container";
@@ -40,27 +56,114 @@ const priorityVariant: Record<MaintenancePriority, "destructive" | "default" | "
 export default function MaintenancePage() {
   const { canEdit } = useSession();
   const queryClient = useQueryClient();
-  const { data: records, isPending } = useQuery({ queryKey: getMaintenanceRecords.key, queryFn: getMaintenanceRecords.fn });
-  const { data: assets } = useQuery({ queryKey: getAssets.key({}), queryFn: () => getAssets.fn({}) });
+  const { data, isPending } = useQuery({ queryKey: getMaintenanceRecords.key({}), queryFn: () => getMaintenanceRecords.fn({}) });
+  const records = data?.maintenance ?? [];
 
   const [open, setOpen] = useState(false);
-  const [assetId, setAssetId] = useState("");
+  const [assetSearch, setAssetSearch] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState<AssetGroup | null>(null);
+  const [unitId, setUnitId] = useState("");
   const [type, setType] = useState<MaintenanceType>("corrective");
   const [priority, setPriority] = useState<MaintenancePriority>("medium");
-  const [description, setDescription] = useState("");
-  const [scheduledDate, setScheduledDate] = useState("");
-  const [estimatedHours, setEstimatedHours] = useState("");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const { data: assetGroups, isFetching: isSearchingAssets } = useQuery({
+    queryKey: ["maintenance-asset-groups", assetSearch],
+    queryFn: async () => {
+      const res = await client.get<{ groups: AssetGroup[] }>("/api/assets", {
+        params: { search: assetSearch || undefined, pageSize: 100 },
+      });
+      return res.data.groups;
+    },
+    enabled: open,
+  });
+
+  const { data: units, isFetching: isLoadingUnits } = useQuery({
+    queryKey: ["maintenance-asset-units", selectedGroup],
+    queryFn: async () => {
+      if (!selectedGroup) return [];
+      const res = await client.get<{ units: AssetUnit[] }>("/api/assets/units", {
+        params: {
+          description: selectedGroup.description,
+          categoryItemId: selectedGroup.category_item_id,
+          locationId: selectedGroup.location_id,
+          departmentId: selectedGroup.department_id,
+        },
+      });
+      return res.data.units;
+    },
+    enabled: open && Boolean(selectedGroup),
+  });
+
+  const resetForm = () => {
+    setAssetSearch("");
+    setSelectedGroup(null);
+    setUnitId("");
+    setType("corrective");
+    setPriority("medium");
+    setScheduledAt("");
+    setNotes("");
+  };
 
   const { mutate, isPending: isSaving } = useMutation({
     mutationFn: addMaintenance.fn,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getMaintenanceRecords.key });
+      queryClient.invalidateQueries({ queryKey: ["maintenance"] });
       toast("Maintenance scheduled");
       setOpen(false);
-      setAssetId("");
-      setDescription("");
-      setScheduledDate("");
-      setEstimatedHours("");
+      resetForm();
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error?.message ?? "Failed to schedule maintenance");
+    },
+  });
+
+  const { mutate: start, isPending: isStarting } = useMutation({
+    mutationFn: startMaintenance.fn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance"] });
+      toast("Maintenance started");
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error?.message ?? "Failed to start maintenance");
+    },
+  });
+
+  const { mutate: cancel, isPending: isCancelling } = useMutation({
+    mutationFn: cancelMaintenance.fn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance"] });
+      toast("Maintenance cancelled");
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error?.message ?? "Failed to cancel maintenance");
+    },
+  });
+
+  const [completingRecord, setCompletingRecord] = useState<MaintenanceRecord | null>(null);
+  const [reassessCondition, setReassessCondition] = useState(false);
+  const [completeCondition, setCompleteCondition] = useState<Condition>("good");
+  const [completeStatus, setCompleteStatus] = useState<AssetStatus>("active");
+  const [completeNotes, setCompleteNotes] = useState("");
+
+  const resetCompleteForm = () => {
+    setCompletingRecord(null);
+    setReassessCondition(false);
+    setCompleteCondition("good");
+    setCompleteStatus("active");
+    setCompleteNotes("");
+  };
+
+  const { mutate: complete, isPending: isCompleting } = useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Parameters<typeof completeMaintenance.fn>[1] }) => completeMaintenance.fn(id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["maintenance"] });
+      toast("Maintenance completed");
+      resetCompleteForm();
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error?.message ?? "Failed to complete maintenance");
     },
   });
 
@@ -68,12 +171,12 @@ export default function MaintenancePage() {
     () => [
       { accessorKey: "code", header: "Code", cell: ({ row }) => <span className="font-mono text-[12.5px]">{row.original.code}</span> },
       {
-        accessorKey: "assetDescription",
+        accessorKey: "asset_description",
         header: "Asset",
         cell: ({ row }) => (
           <div>
-            <div className="text-[13.5px] font-medium">{row.original.assetDescription}</div>
-            <AssetCodeChip code={row.original.assetCode} className="text-[9.5px]" />
+            <div className="text-[13.5px] font-medium">{row.original.asset_description}</div>
+            <AssetCodeChip code={row.original.asset_code} className="text-[9.5px]" />
           </div>
         ),
       },
@@ -106,7 +209,11 @@ export default function MaintenancePage() {
           },
         },
       },
-      { accessorKey: "scheduledDate", header: createSortableHeader("Scheduled"), cell: ({ row }) => <span className="font-mono text-[12.5px] text-muted-foreground">{row.original.scheduledDate}</span> },
+      {
+        accessorKey: "scheduled_at",
+        header: createSortableHeader("Scheduled"),
+        cell: ({ row }) => <span className="font-mono text-[12.5px] text-muted-foreground">{row.original.scheduled_at}</span>,
+      },
       {
         accessorKey: "status",
         header: "Status",
@@ -123,8 +230,35 @@ export default function MaintenancePage() {
           },
         },
       },
+      ...(canEdit
+        ? [
+            {
+              id: "actions",
+              header: "",
+              cell: ({ row }: { row: { original: MaintenanceRecord } }) => {
+                const record = row.original;
+                if (record.status !== "scheduled" && record.status !== "in_progress") return null;
+                return (
+                  <div className="flex items-center gap-2">
+                    {record.status === "scheduled" && (
+                      <Button size="sm" variant="outline" disabled={isStarting} onClick={() => start(record.id)}>
+                        Start
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" disabled={isCompleting} onClick={() => setCompletingRecord(record)}>
+                      Complete
+                    </Button>
+                    <Button size="sm" variant="ghost" disabled={isCancelling} onClick={() => cancel(record.id)}>
+                      Cancel
+                    </Button>
+                  </div>
+                );
+              },
+            } satisfies ColumnDef<MaintenanceRecord>,
+          ]
+        : []),
     ],
-    [],
+    [canEdit, start, cancel, isStarting, isCompleting, isCancelling],
   );
 
   return (
@@ -135,30 +269,78 @@ export default function MaintenancePage() {
           <p className="text-sm text-muted-foreground">Asset maintenance tracking and scheduling</p>
         </div>
         {canEdit && (
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog
+            open={open}
+            onOpenChange={(next) => {
+              setOpen(next);
+              if (!next) resetForm();
+            }}
+          >
             <DialogTrigger asChild>
               <Button>New maintenance</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>New maintenance</DialogTitle>
               </DialogHeader>
               <div className="space-y-3.5">
                 <div>
-                  <Label className="mb-1.5 text-[12.5px] font-semibold">Asset</Label>
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">Search asset</Label>
+                  <Input
+                    value={assetSearch}
+                    onChange={(e) => {
+                      setAssetSearch(e.target.value);
+                      setSelectedGroup(null);
+                      setUnitId("");
+                    }}
+                    placeholder="Search by description or code"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">Asset group</Label>
                   <select
-                    value={assetId}
-                    onChange={(e) => setAssetId(e.target.value)}
+                    value={
+                      selectedGroup
+                        ? `${selectedGroup.location_id}|${selectedGroup.department_id}|${selectedGroup.category_item_id}|${selectedGroup.description}`
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const group = assetGroups?.find(
+                        (g) => `${g.location_id}|${g.department_id}|${g.category_item_id}|${g.description}` === e.target.value,
+                      );
+                      setSelectedGroup(group ?? null);
+                      setUnitId("");
+                    }}
                     className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
                   >
-                    <option value="">Select asset</option>
-                    {assets?.rows.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.description} — {a.code}
+                    <option value="">{isSearchingAssets ? "Searching…" : "Select asset group"}</option>
+                    {assetGroups?.map((g) => (
+                      <option
+                        key={`${g.location_id}|${g.department_id}|${g.category_item_id}|${g.description}`}
+                        value={`${g.location_id}|${g.department_id}|${g.category_item_id}|${g.description}`}
+                      >
+                        {g.description} — {g.location_name} / {g.department_name} ({g.unit_count} units)
                       </option>
                     ))}
                   </select>
                 </div>
+                {selectedGroup && (
+                  <div>
+                    <Label className="mb-1.5 text-[12.5px] font-semibold">Unit</Label>
+                    <select
+                      value={unitId}
+                      onChange={(e) => setUnitId(e.target.value)}
+                      className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
+                    >
+                      <option value="">{isLoadingUnits ? "Loading units…" : "Select unit"}</option>
+                      {units?.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.code} — {u.condition}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="mb-1.5 text-[12.5px] font-semibold">Type</Label>
@@ -185,31 +367,24 @@ export default function MaintenancePage() {
                   </div>
                 </div>
                 <div>
-                  <Label className="mb-1.5 text-[12.5px] font-semibold">Description</Label>
-                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter description" />
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">Scheduled date</Label>
+                  <Input type="date" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="mb-1.5 text-[12.5px] font-semibold">Scheduled date</Label>
-                    <Input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label className="mb-1.5 text-[12.5px] font-semibold">Estimated hours</Label>
-                    <Input type="number" min={0} value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} placeholder="0" />
-                  </div>
+                <div>
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">Notes (optional)</Label>
+                  <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Enter notes" />
                 </div>
               </div>
               <DialogFooter>
                 <Button
-                  disabled={!assetId || !description || !scheduledDate || isSaving}
+                  disabled={!unitId || !scheduledAt || isSaving}
                   onClick={() =>
                     mutate({
-                      assetId,
+                      assetId: unitId,
                       type,
                       priority,
-                      description,
-                      scheduledDate,
-                      estimatedHours: estimatedHours ? Number(estimatedHours) : null,
+                      scheduledAt,
+                      notes: notes || undefined,
                     })
                   }
                 >
@@ -221,7 +396,80 @@ export default function MaintenancePage() {
         )}
       </div>
 
-      <DataTable data={records ?? []} columns={columns} isLoading={isPending} pageSize={20} emptyTitle="No maintenance records yet" />
+      <DataTable data={records} columns={columns} isLoading={isPending} pageSize={20} emptyTitle="No maintenance records yet" />
+
+      <Dialog
+        open={Boolean(completingRecord)}
+        onOpenChange={(next) => {
+          if (!next) resetCompleteForm();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete maintenance</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3.5">
+            <p className="text-[13px] text-muted-foreground">
+              {completingRecord?.asset_description} — <AssetCodeChip code={completingRecord?.asset_code ?? ""} className="text-[9.5px]" />
+            </p>
+            <label className="flex items-center gap-2 text-[13px]">
+              <input type="checkbox" checked={reassessCondition} onChange={(e) => setReassessCondition(e.target.checked)} />
+              Reassess condition / status on completion
+            </label>
+            {reassessCondition && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">Condition</Label>
+                  <select
+                    value={completeCondition}
+                    onChange={(e) => setCompleteCondition(e.target.value as Condition)}
+                    className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
+                  >
+                    <option value="good">Good</option>
+                    <option value="fair">Fair</option>
+                    <option value="bad">Bad</option>
+                  </select>
+                </div>
+                <div>
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">Status</Label>
+                  <select
+                    value={completeStatus}
+                    onChange={(e) => setCompleteStatus(e.target.value as AssetStatus)}
+                    className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
+                  >
+                    <option value="active">Active</option>
+                    <option value="under_maintenance">Under maintenance</option>
+                    <option value="disposed">Disposed</option>
+                    <option value="missing">Missing</option>
+                  </select>
+                </div>
+              </div>
+            )}
+            <div>
+              <Label className="mb-1.5 text-[12.5px] font-semibold">Notes (optional)</Label>
+              <Textarea value={completeNotes} onChange={(e) => setCompleteNotes(e.target.value)} placeholder="Enter notes" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={isCompleting}
+              onClick={() => {
+                if (!completingRecord) return;
+                complete({
+                  id: completingRecord.id,
+                  input: {
+                    condition: reassessCondition ? completeCondition : undefined,
+                    status: reassessCondition ? completeStatus : undefined,
+                    notes: completeNotes || undefined,
+                  },
+                });
+              }}
+            >
+              Mark complete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

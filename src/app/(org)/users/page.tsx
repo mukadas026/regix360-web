@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { X } from "lucide-react";
-import { toast } from "sonner";
-import { getOrgUsers, getPendingInvites, inviteOrgUser, revokeInvite, updateOrgUser } from "@/api";
+import { toast } from "react-hot-toast";
+import { getOrgUsers, inviteUser, revokeInvite, updateMember } from "@/api";
+import type { ApiError } from "@/api";
 import type { OrgUser, Role } from "@/types/asset-platform";
 import { DataTable, createSortableHeader } from "@/components/global/data-table";
 import { PageContainer } from "@/components/global/page-container";
@@ -25,68 +26,83 @@ import { useSession } from "@/providers/session-provider";
 
 const roleLabels: Record<Role, string> = { org_admin: "Org admin", asset_manager: "Asset manager", viewer: "Viewer" };
 
+function getErrorMessage(error: unknown): string {
+  return (error as ApiError)?.message ?? "Something went wrong.";
+}
+
 export default function UsersPage() {
   const { isAdmin } = useSession();
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
 
-  const { data: users, isPending } = useQuery({ queryKey: getOrgUsers.key, queryFn: getOrgUsers.fn });
-  const { data: invites } = useQuery({ queryKey: getPendingInvites.key, queryFn: getPendingInvites.fn });
+  const { data, isPending } = useQuery({ queryKey: getOrgUsers.key, queryFn: getOrgUsers.fn });
+  const users = data?.members;
+  const invites = data?.pendingInvites;
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("viewer");
 
   const { mutate: sendInvite, isPending: isInviting } = useMutation({
-    mutationFn: inviteOrgUser.fn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getPendingInvites.key });
-      toast(`Invite sent to ${inviteEmail}`);
+    mutationFn: inviteUser.fn,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: getOrgUsers.key });
+      toast(result.note);
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("viewer");
     },
+    onError: (error) => toast(getErrorMessage(error)),
   });
 
-  const { mutate: updateUser } = useMutation({
-    mutationFn: updateOrgUser.fn,
+  const { mutate: mutateMember } = useMutation({
+    mutationFn: updateMember.fn,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: getOrgUsers.key });
     },
+    onError: (error) => toast(getErrorMessage(error)),
   });
 
   const { mutate: cancelInvite } = useMutation({
     mutationFn: revokeInvite.fn,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getPendingInvites.key });
+      queryClient.invalidateQueries({ queryKey: getOrgUsers.key });
       toast("Invite revoked");
     },
+    onError: (error) => toast(getErrorMessage(error)),
   });
 
   const filtered = useMemo(() => {
     if (!search) return users ?? [];
     return (users ?? []).filter(
-      (u) => u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()),
+      (u) =>
+        (u.full_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+        u.email.toLowerCase().includes(search.toLowerCase()),
     );
   }, [users, search]);
 
   const columns = useMemo<ColumnDef<OrgUser>[]>(
     () => [
       {
-        accessorKey: "name",
+        accessorKey: "full_name",
         header: createSortableHeader("Name"),
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-[26px] flex-none items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
-              {row.original.name
-                .split(" ")
-                .map((n) => n[0])
-                .join("")}
-            </span>
-            <span className="text-[13.5px] font-medium">{row.original.name}</span>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const displayName = row.original.full_name ?? row.original.email;
+          return (
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-[26px] flex-none items-center justify-center rounded-full bg-accent text-[11px] font-semibold text-accent-foreground">
+                {displayName
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase()}
+              </span>
+              <span className="text-[13.5px] font-medium">{displayName}</span>
+            </div>
+          );
+        },
       },
       { accessorKey: "email", header: "Email", cell: ({ row }) => <span className="text-[13px] text-muted-foreground">{row.original.email}</span> },
       {
@@ -103,7 +119,7 @@ export default function UsersPage() {
             <select
               value={row.original.role}
               onClick={(e) => e.stopPropagation()}
-              onChange={(e) => updateUser({ userId: row.original.id, role: e.target.value as Role })}
+              onChange={(e) => mutateMember({ membershipId: row.original.membership_id, role: e.target.value as Role })}
               className="h-7 rounded-md border border-input bg-card px-2 text-[12.5px] font-medium"
             >
               {Object.entries(roleLabels).map(([value, label]) => (
@@ -117,7 +133,7 @@ export default function UsersPage() {
           ),
       },
       {
-        accessorKey: "isActive",
+        accessorKey: "is_active",
         header: "Status",
         filterFn: (row, columnId, filterValue) => String(row.getValue(columnId)) === filterValue,
         meta: {
@@ -130,13 +146,17 @@ export default function UsersPage() {
           },
         },
         cell: ({ row }) => (
-          <Badge variant={row.original.isActive ? "secondary" : "outline"} className="gap-1.5">
-            <span className={`size-1.5 rounded-full ${row.original.isActive ? "bg-status-good" : "bg-muted-foreground"}`} />
-            {row.original.isActive ? "Active" : "Inactive"}
+          <Badge variant={row.original.is_active ? "secondary" : "outline"} className="gap-1.5">
+            <span className={`size-1.5 rounded-full ${row.original.is_active ? "bg-status-good" : "bg-muted-foreground"}`} />
+            {row.original.is_active ? "Active" : "Inactive"}
           </Badge>
         ),
       },
-      { accessorKey: "lastActive", header: "Last active", cell: ({ row }) => <span className="text-[12.5px] text-muted-foreground">{row.original.lastActive}</span> },
+      {
+        accessorKey: "last_active_at",
+        header: "Last active",
+        cell: ({ row }) => <span className="text-[12.5px] text-muted-foreground">{row.original.last_active_at ?? "Never"}</span>,
+      },
       ...(isAdmin
         ? [
             {
@@ -146,18 +166,18 @@ export default function UsersPage() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    updateUser({ userId: row.original.id, isActive: !row.original.isActive });
+                    mutateMember({ membershipId: row.original.membership_id, isActive: !row.original.is_active });
                   }}
                   className="text-[12.5px] font-semibold text-accent-foreground"
                 >
-                  {row.original.isActive ? "Deactivate" : "Activate"}
+                  {row.original.is_active ? "Deactivate" : "Activate"}
                 </button>
               ),
             },
           ]
         : []),
     ],
-    [isAdmin, updateUser],
+    [isAdmin, mutateMember],
   );
 
   return (
@@ -231,7 +251,7 @@ export default function UsersPage() {
               <div key={invite.id} className="flex items-center justify-between border-b border-border px-5 py-3 last:border-b-0">
                 <div>
                   <div className="text-[13.5px] font-medium">{invite.email}</div>
-                  <div className="text-xs text-muted-foreground">{roleLabels[invite.role]} · sent {invite.createdAt}</div>
+                  <div className="text-xs text-muted-foreground">{roleLabels[invite.role]} · sent {invite.created_at}</div>
                 </div>
                 <button onClick={() => cancelInvite(invite.id)} className="text-muted-foreground/50 hover:text-status-bad">
                   <X size={15} />

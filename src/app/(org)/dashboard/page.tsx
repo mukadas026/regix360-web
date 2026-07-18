@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Cell, Pie, PieChart, Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ClipboardCheck, FilePlus2, FileSpreadsheet, MapPin, Package, Upload } from "lucide-react";
 import { getDashboard } from "@/api";
 import { ConditionBar } from "@/components/global/condition-bar";
 import { PageContainer } from "@/components/global/page-container";
@@ -16,6 +17,10 @@ const conditionColors = {
   fair: "var(--color-status-fair)",
   bad: "var(--color-status-bad)",
 };
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
 
 export default function DashboardPage() {
   const { data, isPending } = useQuery({
@@ -37,7 +42,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!data || data.kpi.assets === 0) {
+  if (!data || data.totals.unitsTotal === 0) {
     return (
       <PageContainer>
         <EmptyState
@@ -58,6 +63,9 @@ export default function DashboardPage() {
     );
   }
 
+  const { totals, needsAttention, unitsByCategory, byLocation, recentActivity, lastImport, lastVerification, activeVerification } = data;
+  const maxLocationCount = byLocation[0]?.asset_lines || 1;
+
   return (
     <PageContainer>
       <div className="mb-[22px]">
@@ -65,13 +73,40 @@ export default function DashboardPage() {
         <p className="text-sm text-muted-foreground">Here&apos;s where the register stands today.</p>
       </div>
 
-      <div className="mb-[22px] grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="Total assets" value={data.kpi.assets.toLocaleString()} />
-        <StatCard label="Locations" value={data.kpi.locations} />
+      <div className="mb-[22px] grid grid-cols-2 gap-4 md:grid-cols-5">
+        <StatCard
+          label="Asset lines"
+          icon={<Package size={15} />}
+          value={totals.assetLines.toLocaleString()}
+          caption={`${totals.unitsTotal.toLocaleString()} units`}
+        />
+        <StatCard label="Locations" icon={<MapPin size={15} />} value={totals.locations} />
+        <StatCard
+          label="Last import"
+          icon={<Upload size={15} />}
+          value={lastImport ? lastImport.imported_count.toLocaleString() : "—"}
+          caption={lastImport ? `${lastImport.file_name} · ${formatDate(lastImport.completed_at)}` : "No imports yet"}
+        />
         <StatCard label="Condition split">
-          <ConditionBar good={data.kpi.good} fair={data.kpi.fair} bad={data.kpi.bad} fullLabel />
+          <ConditionBar good={totals.unitsGood} fair={totals.unitsFair} bad={totals.unitsBad} fullLabel />
         </StatCard>
-        <StatCard label="Last verification" value="14 Mar 2025" caption="by Ama Mensah" />
+        {activeVerification ? (
+          <StatCard
+            label="Verification in progress"
+            icon={<ClipboardCheck size={15} />}
+            value={`${activeVerification.counted}/${activeVerification.in_scope}`}
+            caption={`Started ${formatDate(activeVerification.started_at)}`}
+          />
+        ) : lastVerification ? (
+          <StatCard
+            label="Last verification"
+            icon={<ClipboardCheck size={15} />}
+            value={formatDate(lastVerification.completed_at)}
+            caption={`by ${lastVerification.completed_by_name}${lastVerification.discrepancies ? ` · ${lastVerification.discrepancies} discrepancies` : ""}`}
+          />
+        ) : (
+          <StatCard label="Last verification" icon={<ClipboardCheck size={15} />} value="—" caption="No verification yet" />
+        )}
       </div>
 
       <div className="mb-[22px] grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -84,15 +119,16 @@ export default function DashboardPage() {
               <PieChart>
                 <Pie
                   data={[
-                    { name: "Good", key: "good", value: data.kpi.good },
-                    { name: "Fair", key: "fair", value: data.kpi.fair },
-                    { name: "Bad", key: "bad", value: data.kpi.bad },
+                    { name: "Good", key: "good", value: totals.unitsGood },
+                    { name: "Fair", key: "fair", value: totals.unitsFair },
+                    { name: "Bad", key: "bad", value: totals.unitsBad },
                   ]}
                   dataKey="value"
                   nameKey="name"
                   innerRadius={45}
                   outerRadius={75}
                   paddingAngle={2}
+                  isAnimationActive={false}
                 >
                   {(["good", "fair", "bad"] as const).map((key) => (
                     <Cell key={key} fill={conditionColors[key]} stroke="none" />
@@ -109,14 +145,18 @@ export default function DashboardPage() {
             Units by category
           </div>
           <div className="px-2 py-4">
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={data.byCategory}>
-                <XAxis dataKey="category" fontSize={11} tickLine={false} axisLine={false} interval={0} angle={-20} textAnchor="end" height={50} />
-                <YAxis fontSize={11} tickLine={false} axisLine={false} width={30} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#123C7A" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {unitsByCategory.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">No categories yet.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={unitsByCategory}>
+                  <XAxis dataKey="category" fontSize={11} tickLine={false} axisLine={false} interval={0} angle={-20} textAnchor="end" height={50} />
+                  <YAxis fontSize={11} tickLine={false} axisLine={false} width={30} />
+                  <Tooltip />
+                  <Bar dataKey="unit_count" fill="#123C7A" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
@@ -126,29 +166,29 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <div>
               <div className="font-heading text-[15px] font-semibold">Needs attention</div>
-              <div className="mt-px text-xs text-muted-foreground">Assets in bad condition, by location</div>
+              <div className="mt-px text-xs text-muted-foreground">Locations with assets in bad condition</div>
             </div>
             <span className="rounded-full bg-[#F6E7E4] px-2.5 py-0.5 font-mono text-xs font-semibold text-status-bad">
-              {data.kpi.bad} units
+              {totals.unitsBad} units
             </span>
           </div>
-          {data.attention.length === 0 ? (
+          {needsAttention.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">Nothing needs attention right now.</div>
           ) : (
-            data.attention.map((row) => (
+            needsAttention.map((row) => (
               <Link
-                key={row.locName}
-                href={`/assets?location=${encodeURIComponent(row.locName)}&condition=bad`}
+                key={row.location_id}
+                href={`/assets?location=${encodeURIComponent(row.location_id)}&condition=bad`}
                 className="flex items-center justify-between border-b border-border px-5 py-3.5 last:border-b-0 hover:bg-accent/30"
               >
                 <div className="flex items-center gap-2.5">
                   <span className="size-2 flex-none rounded-full bg-status-bad" />
                   <div>
-                    <div className="text-[13.5px] font-medium">{row.locName}</div>
-                    <div className="text-xs text-muted-foreground">{row.detail}</div>
+                    <div className="text-[13.5px] font-medium">{row.location_name}</div>
+                    <div className="text-xs text-muted-foreground">{row.bad_count} units in bad condition</div>
                   </div>
                 </div>
-                <span className="font-mono text-[13px] font-semibold text-status-bad">{row.count} →</span>
+                <span className="font-mono text-[13px] font-semibold text-status-bad">{row.bad_count} →</span>
               </Link>
             ))
           )}
@@ -160,13 +200,16 @@ export default function DashboardPage() {
               Assets by location
             </div>
             <div className="px-5 pt-2 pb-3.5">
-              {data.byLocation.map((loc) => (
-                <div key={loc.name} className="flex items-center gap-2.5 py-1.5">
-                  <span className="w-[88px] flex-none text-[12.5px]">{loc.name}</span>
+              {byLocation.map((loc) => (
+                <div key={loc.id} className="flex items-center gap-2.5 py-1.5">
+                  <span className="w-[88px] flex-none truncate text-[12.5px]">{loc.name}</span>
                   <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
-                    <span className="block h-full bg-[#123C7A]" style={{ width: loc.pct }} />
+                    <span
+                      className="block h-full bg-[#123C7A]"
+                      style={{ width: `${Math.round((loc.asset_lines / maxLocationCount) * 100)}%` }}
+                    />
                   </span>
-                  <span className="w-7 text-right font-mono text-xs text-muted-foreground">{loc.count}</span>
+                  <span className="w-7 text-right font-mono text-xs text-muted-foreground">{loc.asset_lines}</span>
                 </div>
               ))}
             </div>
@@ -175,15 +218,46 @@ export default function DashboardPage() {
             <div className="border-b border-border px-5 py-3.5 font-heading text-sm font-semibold">
               Recent activity
             </div>
-            {data.activity.map((ev, i) => (
-              <div key={i} className="flex gap-2.5 border-b border-border px-5 py-3 last:border-b-0">
-                <span className="flex-none text-sm">{ev.icon}</span>
-                <div className="leading-snug">
-                  <div className="text-[13px]">{ev.text}</div>
-                  <div className="mt-px text-[11px] text-muted-foreground">{ev.when}</div>
+            {recentActivity.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">No activity yet.</div>
+            ) : (
+              recentActivity.map((ev) => (
+                <div key={ev.id} className="flex gap-2.5 border-b border-border px-5 py-3 last:border-b-0">
+                  <div className="leading-snug">
+                    <div className="text-[13px]">{ev.description}</div>
+                    <div className="mt-px text-[11px] text-muted-foreground">
+                      {ev.actor_name} · {formatDate(ev.occurred_at)}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 font-heading text-sm font-semibold">Quick actions</div>
+            <div className="flex flex-col gap-2">
+              <Button asChild className="justify-start">
+                <Link href="/assets/add">
+                  <FilePlus2 /> Add asset
+                </Link>
+              </Button>
+              <Button variant="outline" asChild className="justify-start">
+                <Link href="/assets/upload">
+                  <Upload /> Upload assets
+                </Link>
+              </Button>
+              <Button variant="outline" asChild className="justify-start">
+                <Link href="/verification/run">
+                  <ClipboardCheck /> Start verification
+                </Link>
+              </Button>
+              <Button variant="outline" asChild className="justify-start">
+                <Link href="/reports">
+                  <FileSpreadsheet /> View reports
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </div>

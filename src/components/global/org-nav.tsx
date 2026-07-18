@@ -3,7 +3,6 @@
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { deleteCookie } from "cookies-next";
 import {
   Activity,
   ChevronLeft,
@@ -22,7 +21,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TOKEN_COOKIE } from "@/api/client";
+import { signOut } from "@/lib/sign-out";
 import { mockOrg } from "@/lib/mock-data";
 import { useSession } from "@/providers/session-provider";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -61,7 +60,7 @@ function getServerCollapsed() {
 
 function OrgIdentity({ collapsed }: { collapsed?: boolean }) {
   return (
-    <div className={cn("flex items-center gap-2.5 px-2 pt-1.5 pb-[18px]", collapsed && "justify-center px-0")}>
+    <div className={cn("flex items-center gap-2.5 px-3 pt-1.5 pb-[18px]", collapsed && "justify-center px-0")}>
       <div className="flex size-7 flex-none items-center justify-center rounded-lg bg-white font-heading text-sm font-bold text-sidebar">
         {mockOrg.name.charAt(0)}
       </div>
@@ -79,7 +78,7 @@ function NavLinks({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?:
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-col gap-0.5">
+    <nav className="flex flex-col">
       {navItems.map((item) => {
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         const Icon = item.icon;
@@ -90,7 +89,7 @@ function NavLinks({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?:
             onClick={onNavigate}
             title={collapsed ? item.label : undefined}
             className={cn(
-              "flex items-center gap-2.5 rounded-lg px-2.5 py-[9px] text-[13.5px] font-medium",
+              "flex cursor-pointer items-center gap-2.5 px-3 py-3 text-[13.5px] font-medium transition-colors duration-150",
               collapsed && "justify-center px-0",
               active
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
@@ -110,13 +109,8 @@ function UserFooter({ collapsed }: { collapsed?: boolean }) {
   const { role } = useSession();
   const router = useRouter();
 
-  function signOut() {
-    deleteCookie(TOKEN_COOKIE);
-    router.push("/login");
-  }
-
   return (
-    <div className={cn("mt-auto flex items-center gap-2.5 border-t border-sidebar-border pt-3", collapsed && "justify-center")}>
+    <div className={cn("mt-auto flex items-center gap-2.5 border-t border-sidebar-border px-3 pt-3", collapsed && "justify-center")}>
       <div className="flex size-[30px] flex-none items-center justify-center rounded-full bg-white/15 text-xs font-semibold text-white">
         AM
       </div>
@@ -127,9 +121,9 @@ function UserFooter({ collapsed }: { collapsed?: boolean }) {
         </div>
       )}
       <button
-        onClick={signOut}
+        onClick={() => signOut(router)}
         title="Sign out"
-        className="flex-none rounded-md p-1.5 text-sidebar-foreground/70 hover:bg-white/10 hover:text-sidebar-foreground"
+        className="flex-none cursor-pointer rounded-md p-1.5 text-sidebar-foreground/70 transition-colors duration-150 hover:bg-white/10 hover:text-sidebar-foreground"
       >
         <LogOut size={15} />
       </button>
@@ -151,7 +145,7 @@ export function OrgNav() {
   return (
     <aside
       className={cn(
-        "relative hidden flex-none flex-col bg-sidebar p-3 transition-[width] duration-200 lg:flex",
+        "relative hidden flex-none flex-col bg-sidebar py-3 transition-[width] duration-200 lg:flex",
         collapsed ? "w-[76px]" : "w-[228px]",
       )}
     >
@@ -162,9 +156,9 @@ export function OrgNav() {
       <button
         onClick={toggle}
         title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute top-16 -right-3 z-10 flex size-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:text-foreground"
+        className="absolute top-1/2 -right-3 z-10 flex size-6 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors duration-150 hover:text-foreground"
       >
-        <ChevronLeft className={cn("size-3.5 transition-transform", collapsed && "rotate-180")} />
+        <ChevronLeft className={cn("size-3.5 transition-transform duration-200", collapsed && "rotate-180")} />
       </button>
     </aside>
   );
@@ -185,7 +179,7 @@ export function MobileTopBar() {
         <Button variant="ghost" size="icon-sm" onClick={() => setOpen(true)}>
           <Menu className="size-[18px]" />
         </Button>
-        <SheetContent side="left" className="flex w-[260px] flex-col bg-sidebar p-3">
+        <SheetContent side="left" className="flex w-[260px] flex-col bg-sidebar py-3">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <OrgIdentity />
           <NavLinks onNavigate={() => setOpen(false)} />

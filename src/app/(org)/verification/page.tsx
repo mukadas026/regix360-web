@@ -4,12 +4,31 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { getVerificationCycles } from "@/api";
-import type { VerificationCycle } from "@/types/asset-platform";
+import { ClipboardCheck } from "lucide-react";
+import { getActiveVerification, getVerificationCycles } from "@/api";
+import type { VerificationCycle, VerificationCycleStatus } from "@/types/asset-platform";
 import { DataTable, createSortableHeader } from "@/components/global/data-table";
 import { PageContainer } from "@/components/global/page-container";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/providers/session-provider";
+
+const statusVariant: Record<VerificationCycleStatus, "default" | "secondary" | "destructive"> = {
+  in_progress: "default",
+  completed: "secondary",
+  abandoned: "destructive",
+};
+
+function formatDate(value: string | null) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function VerificationPage() {
   const { canEdit } = useSession();
@@ -17,12 +36,39 @@ export default function VerificationPage() {
     queryKey: getVerificationCycles.key,
     queryFn: getVerificationCycles.fn,
   });
+  const { data: active } = useQuery({
+    queryKey: getActiveVerification.key,
+    queryFn: getActiveVerification.fn,
+  });
 
   const columns = useMemo<ColumnDef<VerificationCycle>[]>(
     () => [
-      { accessorKey: "date", header: createSortableHeader("Date"), cell: ({ row }) => <span className="font-mono text-[13px] font-medium">{row.original.date}</span> },
-      { accessorKey: "runBy", header: "Run by", cell: ({ row }) => <span className="text-[13px]">{row.original.runBy}</span> },
-      { accessorKey: "locationsLabel", header: "Scope", cell: ({ row }) => <span className="text-[13px] text-muted-foreground">{row.original.locationsLabel}</span> },
+      {
+        accessorKey: "started_at",
+        header: createSortableHeader("Started"),
+        cell: ({ row }) => <span className="font-mono text-[13px] font-medium">{formatDate(row.original.started_at)}</span>,
+      },
+      { accessorKey: "started_by_name", header: "Started by", cell: ({ row }) => <span className="text-[13px]">{row.original.started_by_name}</span> },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => <Badge variant={statusVariant[row.original.status]}>{row.original.status.replace("_", " ")}</Badge>,
+        meta: {
+          filter: {
+            type: "select",
+            options: [
+              { label: "In progress", value: "in_progress" },
+              { label: "Completed", value: "completed" },
+              { label: "Abandoned", value: "abandoned" },
+            ],
+          },
+        },
+      },
+      {
+        accessorKey: "counted",
+        header: () => <div className="text-right">Counted</div>,
+        cell: ({ row }) => <div className="text-right font-mono text-[13px]">{row.original.counted}</div>,
+      },
       {
         accessorKey: "discrepancies",
         header: () => <div className="text-right">Discrepancies</div>,
@@ -33,11 +79,15 @@ export default function VerificationPage() {
       {
         id: "actions",
         header: "",
-        cell: () => (
+        cell: ({ row }) => (
           <div className="text-right">
-            <button className="text-[13px] font-semibold text-accent-foreground" onClick={(e) => e.stopPropagation()}>
+            <Link
+              href={`/verification/${row.original.id}/report`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-[13px] font-semibold text-accent-foreground"
+            >
               View report →
-            </button>
+            </Link>
           </div>
         ),
       },
@@ -56,12 +106,29 @@ export default function VerificationPage() {
         </div>
         {canEdit && (
           <Button asChild>
-            <Link href="/verification/run">Start verification</Link>
+            <Link href="/verification/run">{active ? "Continue verification" : "Start verification"}</Link>
           </Button>
         )}
       </div>
 
-      <DataTable data={cycles ?? []} columns={columns} isLoading={isPending} emptyTitle="No verification cycles yet" />
+      {active && (
+        <Link
+          href="/verification/run"
+          className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[#CFE0F7] bg-accent px-4 py-3 text-accent-foreground transition hover:bg-accent/80"
+        >
+          <div className="flex items-center gap-2.5">
+            <ClipboardCheck size={17} />
+            <span className="text-[13.5px] font-medium">
+              A verification cycle is in progress — started by {active.cycle.started_by_name}
+            </span>
+          </div>
+          <span className="font-mono text-[13px] font-semibold">
+            {active.progress.counted} / {active.progress.in_scope} counted
+          </span>
+        </Link>
+      )}
+
+      <DataTable data={cycles ?? []} columns={columns} isLoading={isPending} pageSize={20} emptyTitle="No verification cycles yet" />
     </PageContainer>
   );
 }

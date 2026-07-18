@@ -3,12 +3,23 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Trash2 } from "lucide-react";
-import { toast } from "sonner";
-import { addLocation, getAssets, getLocations } from "@/api";
+import { Pencil, Trash2 } from "lucide-react";
+import { toast } from "react-hot-toast";
+import { addLocation, deleteLocation, getLocations, updateLocation } from "@/api";
+import type { ApiError } from "@/api";
 import type { Location } from "@/types/asset-platform";
 import { DataTable, createSortableHeader } from "@/components/global/data-table";
 import { PageContainer } from "@/components/global/page-container";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,7 +40,12 @@ export default function LocationsPage() {
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [code, setCode] = useState("");
   const [address, setAddress] = useState("");
+
+  const [editing, setEditing] = useState<Location | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editAddress, setEditAddress] = useState("");
 
   const { mutate, isPending: isSaving } = useMutation({
     mutationFn: addLocation.fn,
@@ -38,27 +54,69 @@ export default function LocationsPage() {
       toast("Location added");
       setOpen(false);
       setName("");
+      setCode("");
       setAddress("");
     },
+    onError: (error) => toast((error as ApiError).message ?? "Could not add location."),
+  });
+
+  const { mutate: saveEdit, isPending: isEditSaving } = useMutation({
+    mutationFn: updateLocation.fn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getLocations.key });
+      toast("Location updated");
+      setEditing(null);
+    },
+    onError: (error) => toast((error as ApiError).message ?? "Could not update location."),
+  });
+
+  const { mutate: remove } = useMutation({
+    mutationFn: deleteLocation.fn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getLocations.key });
+      toast("Location deleted");
+    },
+    onError: (error) => toast((error as ApiError).message ?? "Could not delete location."),
   });
 
   const columns = useMemo<ColumnDef<Location>[]>(
     () => [
       { accessorKey: "name", header: createSortableHeader("Location"), cell: ({ row }) => <span className="text-[13.5px] font-medium">{row.original.name}</span> },
+      { accessorKey: "code", header: "Code", cell: ({ row }) => <span className="font-mono text-[12.5px]">{row.original.code}</span> },
       { accessorKey: "address", header: "Address", cell: ({ row }) => <span className="text-[13px] text-muted-foreground">{row.original.address ?? "—"}</span> },
       {
-        accessorKey: "assetCount",
+        accessorKey: "total_units",
         header: () => <div className="text-right">Assets</div>,
-        cell: ({ row }) => <div className="text-right font-mono text-[13px]">{row.original.assetCount}</div>,
+        cell: ({ row }) => <div className="text-right font-mono text-[13px]">{row.original.total_units}</div>,
       },
-      { accessorKey: "createdAt", header: "Created", cell: ({ row }) => <span className="font-mono text-[12.5px] text-muted-foreground">{row.original.createdAt}</span> },
+      {
+        accessorKey: "created_at",
+        header: "Created",
+        cell: ({ row }) => <span className="font-mono text-[12.5px] text-muted-foreground">{row.original.created_at}</span>,
+      },
       {
         id: "actions",
         header: "",
-        cell: ({ row }) => <DeleteLocationButton locationId={row.original.id} disabled={!canEdit} />,
+        cell: ({ row }) =>
+          canEdit ? (
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditing(row.original);
+                  setEditName(row.original.name);
+                  setEditAddress(row.original.address ?? "");
+                }}
+                className="text-muted-foreground/50 hover:text-foreground"
+              >
+                <Pencil size={15} />
+              </button>
+              <DeleteLocationButton location={row.original} onConfirm={() => remove(row.original.id)} />
+            </div>
+          ) : null,
       },
     ],
-    [canEdit],
+    [canEdit, remove],
   );
 
   return (
@@ -86,6 +144,17 @@ export default function LocationsPage() {
                 </div>
                 <div>
                   <Label className="mb-1.5 text-[12.5px] font-semibold">
+                    Code <span className="font-normal text-muted-foreground">— 2-6 letters/numbers, permanent</span>
+                  </Label>
+                  <Input
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. AGB"
+                    maxLength={6}
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">
                     Address <span className="font-normal text-muted-foreground">— optional</span>
                   </Label>
                   <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Agbogba Junction, Accra" />
@@ -93,8 +162,8 @@ export default function LocationsPage() {
               </div>
               <DialogFooter>
                 <Button
-                  disabled={!name || isSaving}
-                  onClick={() => mutate({ name, address: address || null })}
+                  disabled={!name || !code || isSaving}
+                  onClick={() => mutate({ name, code, address: address || null })}
                 >
                   Add location
                 </Button>
@@ -105,31 +174,71 @@ export default function LocationsPage() {
       </div>
 
       <DataTable data={locations ?? []} columns={columns} isLoading={isPending} pageSize={20} emptyTitle="No locations yet" />
+
+      <Dialog open={editing !== null} onOpenChange={(next) => !next && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit location</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3.5">
+            <div>
+              <Label className="mb-1.5 text-[12.5px] font-semibold">Location name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div>
+              <Label className="mb-1.5 text-[12.5px] font-semibold">
+                Code <span className="font-normal text-muted-foreground">— permanent</span>
+              </Label>
+              <Input value={editing?.code ?? ""} disabled />
+            </div>
+            <div>
+              <Label className="mb-1.5 text-[12.5px] font-semibold">Address</Label>
+              <Input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={!editName || isEditSaving}
+              onClick={() => {
+                if (!editing) return;
+                saveEdit({ id: editing.id, name: editName, address: editAddress || null });
+              }}
+            >
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }
 
-function DeleteLocationButton({ locationId, disabled }: { locationId: string; disabled: boolean }) {
-  const { data } = useQuery({
-    queryKey: getAssets.key({ locationId }),
-    queryFn: () => getAssets.fn({ locationId }),
-  });
-
-  if (disabled) return null;
+function DeleteLocationButton({ location, onConfirm }: { location: Location; onConfirm: () => void }) {
+  const [open, setOpen] = useState(false);
 
   return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        toast(
-          data && data.filteredTotal > 0
-            ? `This location has ${data.filteredTotal} assets. Move or delete them first.`
-            : "Location deleted",
-        );
-      }}
-      className="text-muted-foreground/50 hover:text-status-bad"
-    >
-      <Trash2 size={15} />
-    </button>
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        className="text-muted-foreground/50 hover:text-status-bad"
+      >
+        <Trash2 size={15} />
+      </button>
+      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete {location.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This can&apos;t be undone. Locations holding asset lines can&apos;t be deleted — move them first.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Delete</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

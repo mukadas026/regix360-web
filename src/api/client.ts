@@ -24,20 +24,23 @@ client.interceptors.response.use(
   },
 );
 
+// Backend error envelope is FLAT: `{ error: "human message", ...extra }` —
+// e.g. verification's already-active 409 carries a sibling `cycleId` field.
+// `error` is a plain string, never a nested object (see regix360-backend
+// src/shared/errors.js `errorHandler`, the one place errors become HTTP).
 export type ApiError = {
   name: string;
   message: string;
-  details?: unknown;
-};
+} & Record<string, unknown>;
 
 export function throwError(error: unknown): never {
   if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{ error?: { message?: string; details?: unknown } }>;
-    const payload = axiosError.response?.data?.error;
+    const axiosError = error as AxiosError<Record<string, unknown> & { error?: string }>;
+    const { error: message, ...extra } = axiosError.response?.data ?? {};
     throw {
       name: "ApiError",
-      message: payload?.message ?? axiosError.message ?? "Something went wrong.",
-      details: payload?.details,
+      message: (message as string | undefined) ?? axiosError.message ?? "Something went wrong.",
+      ...extra,
     } satisfies ApiError;
   }
   throw {

@@ -1,4 +1,5 @@
 import { client, throwError } from "./client";
+import type { Me } from "@/types/asset-platform";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -27,15 +28,6 @@ export const signIn = {
     }
     return data;
   },
-};
-
-// Not documented in api.md yet — backend needs to add GET /api/me returning the
-// signed-in user's org/platform role. There is currently no way for the frontend
-// to learn this after a plain login (only POST /api/invites/accept returns it).
-export type Me = {
-  orgId: string | null;
-  orgRole: "viewer" | "asset_manager" | "org_admin" | null;
-  platformRole: "operator" | "super_admin" | null;
 };
 
 export const getMe = {

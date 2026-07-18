@@ -1,31 +1,60 @@
-import { mockDepartments, mockLocations } from "@/lib/mock-data";
+import { client, throwError } from "./client";
 import type { Department } from "@/types/asset-platform";
-import { delay } from "./mock";
 
 export const getDepartments = {
-  key: ["departments"] as const,
-  fn: async () => delay(mockDepartments),
+  key: (locationId?: string) => ["departments", locationId ?? null] as const,
+  fn: async (locationId?: string): Promise<Department[]> => {
+    try {
+      const res = await client.get<{ departments: Department[] }>("/api/departments", {
+        params: locationId ? { locationId } : undefined,
+      });
+      return res.data.departments;
+    } catch (error) {
+      throwError(error);
+    }
+  },
 };
 
 export type AddDepartmentInput = {
+  locationId: string;
   name: string;
   code: string;
-  locationId: string;
 };
 
 export const addDepartment = {
-  fn: async (input: AddDepartmentInput) => {
-    const location = mockLocations.find((l) => l.id === input.locationId);
-    const department: Department = {
-      id: `dept-${mockDepartments.length + 1}`,
-      name: input.name,
-      code: input.code.toUpperCase(),
-      locationId: input.locationId,
-      locationName: location?.name ?? "",
-      isActive: true,
-      createdAt: "Just now",
-    };
-    mockDepartments.unshift(department);
-    return delay(department);
+  fn: async (input: AddDepartmentInput): Promise<Department> => {
+    try {
+      const res = await client.post<{ department: Department }>("/api/departments", input);
+      return res.data.department;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
+
+export type UpdateDepartmentInput = {
+  id: string;
+  name: string;
+};
+
+export const updateDepartment = {
+  fn: async ({ id, name }: UpdateDepartmentInput): Promise<Department> => {
+    try {
+      const res = await client.patch<{ department: Department }>(`/api/departments/${id}`, { name });
+      return res.data.department;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
+
+export const deleteDepartment = {
+  fn: async (id: string): Promise<{ ok: true }> => {
+    try {
+      const res = await client.delete<{ ok: true }>(`/api/departments/${id}`);
+      return res.data;
+    } catch (error) {
+      throwError(error);
+    }
   },
 };

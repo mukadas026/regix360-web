@@ -10,6 +10,7 @@ import { TOKEN_COOKIE } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 
 function readInviteToken() {
   if (typeof window === "undefined") return null;
@@ -83,16 +84,22 @@ export default function SetPasswordPage() {
           <Label htmlFor="fullName" className="mb-1.5 text-xs font-semibold">
             Full name <span className="font-normal text-muted-foreground">— optional</span>
           </Label>
-          <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} className="mb-4" />
+          <Input
+            id="fullName"
+            placeholder="e.g. Ama Mensah"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="mb-4"
+          />
 
           <Label htmlFor="password" className="mb-1.5 text-xs font-semibold">
             Password
           </Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             required
             minLength={8}
+            placeholder="At least 8 characters"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mb-4"
@@ -101,10 +108,10 @@ export default function SetPasswordPage() {
           <Label htmlFor="confirmPassword" className="mb-1.5 text-xs font-semibold">
             Confirm password
           </Label>
-          <Input
+          <PasswordInput
             id="confirmPassword"
-            type="password"
             required
+            placeholder="Re-enter password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             className="mb-5"
