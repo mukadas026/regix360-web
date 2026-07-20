@@ -1,98 +1,26 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Eye, Layers, Printer } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { client } from "@/api/client";
-import { getAssets, getAssetUnits, getCategories, getLocations } from "@/api";
-import type { AssetFilters, AssetSort, AssetUnitsQuery } from "@/api/assets";
-import type { AssetGroup, AssetUnit, Condition, Department } from "@/types/asset-platform";
+import { getAssets, getCategories, getLocations } from "@/api";
+import type { AssetFilters, AssetSort } from "@/api/assets";
+import type { AssetGroup, Condition, Department } from "@/types/asset-platform";
 import { ConditionBar } from "@/components/global/condition-bar";
 import { DataTable } from "@/components/global/data-table";
-import { AssetDetailSheet } from "@/components/global/asset-detail-sheet";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContextMenuItem } from "@/components/ui/context-menu";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/providers/session-provider";
-
-const conditionBadgeVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  good: "default",
-  fair: "secondary",
-  bad: "destructive",
-};
-
-function groupKey(group: AssetGroup): AssetUnitsQuery {
-  return {
-    description: group.description,
-    categoryItemId: group.category_item_id,
-    locationId: group.location_id,
-    departmentId: group.department_id,
-  };
-}
-
-function UnitsDrawer({ group, onClose, onSelectUnit }: { group: AssetGroup | null; onClose: () => void; onSelectUnit: (id: string) => void }) {
-  const query = group ? groupKey(group) : null;
-  const { data: units, isPending } = useQuery({
-    queryKey: getAssetUnits.key(query ?? { description: "", categoryItemId: "", locationId: "", departmentId: "" }),
-    queryFn: () => getAssetUnits.fn(query as AssetUnitsQuery),
-    enabled: Boolean(query),
-  });
-
-  return (
-    <Sheet open={Boolean(group)} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-[440px] max-w-[92vw] gap-0 p-0 sm:max-w-[92vw]">
-        <SheetHeader className="flex-none gap-1 border-b border-border px-[22px] py-5">
-          <SheetTitle className="font-heading text-lg font-semibold tracking-tight">{group?.description}</SheetTitle>
-          <p className="text-[13px] text-muted-foreground">
-            {group?.location_name} · {group?.department_name}
-          </p>
-        </SheetHeader>
-        <div className="flex-1 overflow-y-auto p-[22px]">
-          {isPending ? (
-            <div className="space-y-2">
-              <Skeleton className="h-11 w-full" />
-              <Skeleton className="h-11 w-full" />
-              <Skeleton className="h-11 w-full" />
-            </div>
-          ) : !units || units.length === 0 ? (
-            <p className="text-[13px] text-muted-foreground">No units found for this group.</p>
-          ) : (
-            <div className="space-y-2">
-              {units.map((unit: AssetUnit) => (
-                <button
-                  key={unit.id}
-                  onClick={() => onSelectUnit(unit.id)}
-                  className="flex w-full items-center justify-between rounded-lg border border-border px-3.5 py-2.5 text-left hover:bg-accent/30"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-mono text-[12.5px] font-medium">{unit.code}</div>
-                    <div className="mt-0.5 text-[11.5px] text-muted-foreground capitalize">{unit.status.replace("_", " ")}</div>
-                  </div>
-                  <Badge variant={conditionBadgeVariant[unit.condition]} className="capitalize">
-                    {unit.condition}
-                  </Badge>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
 
 function RegisterContent() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const { canEdit } = useSession();
-  const [resolving, setResolving] = useState(false);
 
   const search = searchParams.get("search") ?? "";
   const locationId = searchParams.get("location") ?? "";
@@ -101,12 +29,6 @@ function RegisterContent() {
   const condition = searchParams.get("condition") ?? "";
   const sort = (searchParams.get("sort") as AssetSort) || "updated";
   const page = Number(searchParams.get("page") ?? "1") || 1;
-  const activeAssetId = searchParams.get("asset");
-
-  const activeGroupDesc = searchParams.get("gd");
-  const activeGroupCat = searchParams.get("gc");
-  const activeGroupLoc = searchParams.get("gl");
-  const activeGroupDept = searchParams.get("gp");
 
   const filters: AssetFilters = {
     search: search || undefined,
@@ -134,33 +56,6 @@ function RegisterContent() {
     queryFn: () => getAssets.fn(filters),
   });
 
-  const activeGroup = useMemo<AssetGroup | null>(() => {
-    if (!activeGroupDesc || !activeGroupCat || !activeGroupLoc || !activeGroupDept || !data) return null;
-    return (
-      data.groups.find(
-        (g) =>
-          g.description === activeGroupDesc &&
-          g.category_item_id === activeGroupCat &&
-          g.location_id === activeGroupLoc &&
-          g.department_id === activeGroupDept,
-      ) ?? {
-        description: activeGroupDesc,
-        category_item_id: activeGroupCat,
-        category: "",
-        item_code: "",
-        location_id: activeGroupLoc,
-        location_name: "",
-        department_id: activeGroupDept,
-        department_name: "",
-        unit_count: 0,
-        good_count: 0,
-        fair_count: 0,
-        bad_count: 0,
-        updated_at: "",
-      }
-    );
-  }, [activeGroupDesc, activeGroupCat, activeGroupLoc, activeGroupDept, data]);
-
   function updateParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value);
@@ -173,60 +68,18 @@ function RegisterContent() {
     router.push("/assets");
   }
 
-  function openAsset(id: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("asset", id);
-    params.delete("gd");
-    params.delete("gc");
-    params.delete("gl");
-    params.delete("gp");
-    router.push(`/assets?${params.toString()}`);
-  }
-
-  function closeAsset() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("asset");
-    router.push(`/assets?${params.toString()}`);
-  }
-
-  function openGroupDrawer(group: AssetGroup) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("gd", group.description);
-    params.set("gc", group.category_item_id);
-    params.set("gl", group.location_id);
-    params.set("gp", group.department_id);
-    router.push(`/assets?${params.toString()}`);
-  }
-
-  function closeGroupDrawer() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("gd");
-    params.delete("gc");
-    params.delete("gl");
-    params.delete("gp");
-    router.push(`/assets?${params.toString()}`);
-  }
-
-  async function handleRowClick(group: AssetGroup) {
-    if (resolving) return;
-    if (group.unit_count === 1) {
-      setResolving(true);
-      try {
-        const units = await queryClient.fetchQuery({
-          queryKey: getAssetUnits.key(groupKey(group)),
-          queryFn: () => getAssetUnits.fn(groupKey(group)),
-        });
-        if (units && units[0]) {
-          openAsset(units[0].id);
-          return;
-        }
-      } catch {
-        toast("Couldn't load this asset — try again.");
-      } finally {
-        setResolving(false);
-      }
-    }
-    openGroupDrawer(group);
+  function openGroup(group: AssetGroup) {
+    const params = new URLSearchParams({
+      description: group.description,
+      categoryItemId: group.category_item_id,
+      locationId: group.location_id,
+      departmentId: group.department_id,
+      category: group.category,
+      itemCode: group.item_code,
+      locationName: group.location_name,
+      departmentName: group.department_name,
+    });
+    router.push(`/assets/units?${params.toString()}`);
   }
 
   const rows = data?.groups ?? [];
@@ -308,7 +161,7 @@ function RegisterContent() {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              handleRowClick(row.original);
+              openGroup(row.original);
             }}
             title="View units"
             className="text-muted-foreground/50 hover:text-foreground"
@@ -427,7 +280,7 @@ function RegisterContent() {
           data={rows}
           columns={columns}
           isLoading={isPending}
-          onRowClick={handleRowClick}
+          onRowClick={openGroup}
           getRowId={(row) => `${row.description}::${row.category_item_id}::${row.location_id}::${row.department_id}`}
           pageSize={50}
           emptyTitle="No assets match these filters"
@@ -438,7 +291,7 @@ function RegisterContent() {
           }
           rowContextMenu={(group) => (
             <>
-              <ContextMenuItem onClick={() => handleRowClick(group)}>
+              <ContextMenuItem onClick={() => openGroup(group)}>
                 <Eye /> View units
               </ContextMenuItem>
               <ContextMenuItem onClick={() => toast("Bulk label printing — not wired up yet")}>
@@ -472,9 +325,6 @@ function RegisterContent() {
           </div>
         )}
       </div>
-
-      <UnitsDrawer group={activeGroup} onClose={closeGroupDrawer} onSelectUnit={openAsset} />
-      <AssetDetailSheet assetId={activeAssetId} onClose={closeAsset} />
     </div>
   );
 }

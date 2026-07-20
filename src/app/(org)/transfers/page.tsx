@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowRight } from "lucide-react";
@@ -31,16 +32,19 @@ const statusVariant: Record<TransferStatus, "secondary" | "outline" | "destructi
   cancelled: "destructive",
 };
 
-export default function TransfersPage() {
+function TransfersContent() {
+  const searchParams = useSearchParams();
+  const prefillCode = searchParams.get("prefillCode");
+
   const { canEdit, isAdmin } = useSession();
   const queryClient = useQueryClient();
   const { data, isPending } = useQuery({ queryKey: getTransfers.key({}), queryFn: () => getTransfers.fn({}) });
   const transfers = data?.transfers ?? [];
 
-  const [open, setOpen] = useState(false);
-  const [assetSearch, setAssetSearch] = useState("");
-  const [selectedGroup, setSelectedGroup] = useState<AssetGroup | null>(null);
-  const [unitId, setUnitId] = useState("");
+  const [open, setOpen] = useState(Boolean(prefillCode));
+  const [assetSearch, setAssetSearch] = useState(prefillCode ?? "");
+  const [manualGroup, setManualGroup] = useState<AssetGroup | null>(null);
+  const [manualUnitId, setManualUnitId] = useState("");
   const [toLocationId, setToLocationId] = useState("");
   const [toDepartmentId, setToDepartmentId] = useState("");
   const [toCustodianId, setToCustodianId] = useState("");
@@ -56,6 +60,14 @@ export default function TransfersPage() {
     },
     enabled: open,
   });
+
+  // Quick-launch from the asset register's "Initiate transfer" menu item:
+  // the dialog opens pre-searched for that unit's code (state above); once
+  // the search resolves to exactly one group, use it as a fallback selection
+  // — derived here (not via effect) so it never fights a manual pick.
+  const autoGroup =
+    prefillCode && assetSearch === prefillCode && assetGroups?.length === 1 ? assetGroups[0] : null;
+  const selectedGroup = manualGroup ?? autoGroup;
 
   const { data: units, isFetching: isLoadingUnits } = useQuery({
     queryKey: ["transfer-asset-units", selectedGroup],
@@ -73,6 +85,9 @@ export default function TransfersPage() {
     },
     enabled: open && Boolean(selectedGroup),
   });
+
+  const autoUnitId = prefillCode ? (units?.find((u) => u.code === prefillCode)?.id ?? "") : "";
+  const unitId = manualUnitId || autoUnitId;
 
   const { data: locations } = useQuery({
     queryKey: ["transfer-locations"],
@@ -104,8 +119,8 @@ export default function TransfersPage() {
 
   const resetForm = () => {
     setAssetSearch("");
-    setSelectedGroup(null);
-    setUnitId("");
+    setManualGroup(null);
+    setManualUnitId("");
     setToLocationId("");
     setToDepartmentId("");
     setToCustodianId("");
@@ -260,8 +275,8 @@ export default function TransfersPage() {
                     value={assetSearch}
                     onChange={(e) => {
                       setAssetSearch(e.target.value);
-                      setSelectedGroup(null);
-                      setUnitId("");
+                      setManualGroup(null);
+                      setManualUnitId("");
                     }}
                     placeholder="Search by description or code"
                   />
@@ -274,8 +289,8 @@ export default function TransfersPage() {
                       const group = assetGroups?.find(
                         (g) => `${g.location_id}|${g.department_id}|${g.category_item_id}|${g.description}` === e.target.value,
                       );
-                      setSelectedGroup(group ?? null);
-                      setUnitId("");
+                      setManualGroup(group ?? null);
+                      setManualUnitId("");
                     }}
                     className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
                   >
@@ -295,7 +310,7 @@ export default function TransfersPage() {
                     <Label className="mb-1.5 text-[12.5px] font-semibold">Unit</Label>
                     <select
                       value={unitId}
-                      onChange={(e) => setUnitId(e.target.value)}
+                      onChange={(e) => setManualUnitId(e.target.value)}
                       className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
                     >
                       <option value="">{isLoadingUnits ? "Loading units…" : "Select unit"}</option>
@@ -394,5 +409,13 @@ export default function TransfersPage() {
 
       <DataTable data={transfers} columns={columns} isLoading={isPending} pageSize={20} emptyTitle="No transfers yet" />
     </PageContainer>
+  );
+}
+
+export default function TransfersPage() {
+  return (
+    <Suspense>
+      <TransfersContent />
+    </Suspense>
   );
 }

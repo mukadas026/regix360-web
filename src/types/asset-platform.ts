@@ -114,6 +114,7 @@ export type AssetDetail = AssetUnit & {
   category: string;
   item_code: string;
   custom_code: string | null;
+  notes: string | null;
   history: ConditionHistoryEntry[];
   transfers: AssetTransferSnapshot[];
 };

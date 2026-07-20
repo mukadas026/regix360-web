@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "react-hot-toast";
@@ -57,19 +58,31 @@ function formatDate(value: string | null) {
 function AssetPicker({
   selectedUnit,
   onSelect,
+  initialSearch,
 }: {
   selectedUnit: { unit: AssetUnit; group: AssetGroup } | null;
   onSelect: (value: { unit: AssetUnit; group: AssetGroup } | null) => void;
+  initialSearch?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [group, setGroup] = useState<AssetGroup | null>(null);
+  const [open, setOpen] = useState(Boolean(initialSearch));
+  const [search, setSearch] = useState(initialSearch ?? "");
+  const [manualGroup, setManualGroup] = useState<AssetGroup | null>(null);
+  const prefillApplied = useRef(false);
 
   const { data: assetsResponse, isFetching: isSearching } = useQuery({
     queryKey: getAssets.key({ search }),
     queryFn: () => getAssets.fn({ search, pageSize: 20 }),
-    enabled: open && !group && search.trim().length > 0,
+    enabled: open && !manualGroup && search.trim().length > 0,
   });
+
+  const groups = assetsResponse?.groups ?? [];
+
+  // Quick-launch from the asset register's "Start disposal" menu item: the
+  // popover opens pre-searched for that unit's code (state above); once the
+  // search resolves to exactly one group, fall back to it — derived here
+  // (not via effect) so it never fights a manual pick.
+  const autoGroup = initialSearch && !manualGroup && groups.length === 1 ? groups[0] : null;
+  const group = manualGroup ?? autoGroup;
 
   const { data: units, isFetching: isLoadingUnits } = useQuery({
     queryKey: group
@@ -90,7 +103,20 @@ function AssetPicker({
     enabled: open && Boolean(group),
   });
 
-  const groups = assetsResponse?.groups ?? [];
+  // Auto-selecting a unit here means calling the parent's onSelect callback
+  // and closing this popover — a real side effect (not just local derived
+  // state), so it stays in an effect; the ref makes it fire once.
+  useEffect(() => {
+    if (initialSearch && !prefillApplied.current && group && units) {
+      const match = units.find((u) => u.code === initialSearch && u.status !== "disposed");
+      if (match) {
+        prefillApplied.current = true;
+        onSelect({ unit: match, group });
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- closing the popover is part of the same auto-select action above, not derived render state
+        setOpen(false);
+      }
+    }
+  }, [initialSearch, group, units, onSelect]);
 
   return (
     <Popover
@@ -98,7 +124,7 @@ function AssetPicker({
       onOpenChange={(next) => {
         setOpen(next);
         if (!next) {
-          setGroup(null);
+          setManualGroup(null);
           setSearch("");
         }
       }}
@@ -127,7 +153,7 @@ function AssetPicker({
               <button
                 type="button"
                 className="text-[12px] font-semibold text-accent-foreground"
-                onClick={() => setGroup(null)}
+                onClick={() => setManualGroup(null)}
               >
                 Back
               </button>
@@ -146,7 +172,7 @@ function AssetPicker({
                     <CommandItem
                       key={`${g.category_item_id}-${g.location_id}-${g.department_id}-${g.description}`}
                       value={`${g.description}-${g.item_code}`}
-                      onSelect={() => setGroup(g)}
+                      onSelect={() => setManualGroup(g)}
                     >
                       <div className="flex w-full flex-col gap-0.5">
                         <span className="text-[13px] font-medium">{g.description}</span>
@@ -190,7 +216,10 @@ function AssetPicker({
   );
 }
 
-export default function DisposalPage() {
+function DisposalContent() {
+  const searchParams = useSearchParams();
+  const prefillCode = searchParams.get("prefillCode");
+
   const { canEdit } = useSession();
   const queryClient = useQueryClient();
   const { data: response, isPending } = useQuery({
@@ -198,7 +227,7 @@ export default function DisposalPage() {
     queryFn: () => getDisposalRecords.fn({ pageSize: 100 }),
   });
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(prefillCode));
   const [selectedUnit, setSelectedUnit] = useState<{ unit: AssetUnit; group: AssetGroup } | null>(null);
   const [method, setMethod] = useState<DisposalMethod>("scrapped");
   const [reason, setReason] = useState("");
@@ -386,7 +415,7 @@ export default function DisposalPage() {
               <div className="space-y-3.5">
                 <div>
                   <Label className="mb-1.5 text-[12.5px] font-semibold">Asset</Label>
-                  <AssetPicker selectedUnit={selectedUnit} onSelect={setSelectedUnit} />
+                  <AssetPicker selectedUnit={selectedUnit} onSelect={setSelectedUnit} initialSearch={prefillCode ?? undefined} />
                 </div>
                 <div>
                   <Label className="mb-1.5 text-[12.5px] font-semibold">Method</Label>
@@ -434,5 +463,13 @@ export default function DisposalPage() {
 
       <DataTable data={response?.disposals ?? []} columns={columns} isLoading={isPending} pageSize={20} emptyTitle="No disposal records yet" />
     </PageContainer>
+  );
+}
+
+export default function DisposalPage() {
+  return (
+    <Suspense>
+      <DisposalContent />
+    </Suspense>
   );
 }

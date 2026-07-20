@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { toast } from "react-hot-toast";
@@ -53,16 +54,19 @@ const priorityVariant: Record<MaintenancePriority, "destructive" | "default" | "
   low: "secondary",
 };
 
-export default function MaintenancePage() {
+function MaintenanceContent() {
+  const searchParams = useSearchParams();
+  const prefillCode = searchParams.get("prefillCode");
+
   const { canEdit } = useSession();
   const queryClient = useQueryClient();
   const { data, isPending } = useQuery({ queryKey: getMaintenanceRecords.key({}), queryFn: () => getMaintenanceRecords.fn({}) });
   const records = data?.maintenance ?? [];
 
-  const [open, setOpen] = useState(false);
-  const [assetSearch, setAssetSearch] = useState("");
-  const [selectedGroup, setSelectedGroup] = useState<AssetGroup | null>(null);
-  const [unitId, setUnitId] = useState("");
+  const [open, setOpen] = useState(Boolean(prefillCode));
+  const [assetSearch, setAssetSearch] = useState(prefillCode ?? "");
+  const [manualGroup, setManualGroup] = useState<AssetGroup | null>(null);
+  const [manualUnitId, setManualUnitId] = useState("");
   const [type, setType] = useState<MaintenanceType>("corrective");
   const [priority, setPriority] = useState<MaintenancePriority>("medium");
   const [scheduledAt, setScheduledAt] = useState("");
@@ -78,6 +82,14 @@ export default function MaintenancePage() {
     },
     enabled: open,
   });
+
+  // Quick-launch from the asset register's "Schedule maintenance" menu
+  // item: the dialog opens pre-searched for that unit's code (state above);
+  // once the search resolves to exactly one group, fall back to it — derived
+  // here (not via effect) so it never fights a manual pick.
+  const autoGroup =
+    prefillCode && assetSearch === prefillCode && assetGroups?.length === 1 ? assetGroups[0] : null;
+  const selectedGroup = manualGroup ?? autoGroup;
 
   const { data: units, isFetching: isLoadingUnits } = useQuery({
     queryKey: ["maintenance-asset-units", selectedGroup],
@@ -96,10 +108,13 @@ export default function MaintenancePage() {
     enabled: open && Boolean(selectedGroup),
   });
 
+  const autoUnitId = prefillCode ? (units?.find((u) => u.code === prefillCode)?.id ?? "") : "";
+  const unitId = manualUnitId || autoUnitId;
+
   const resetForm = () => {
     setAssetSearch("");
-    setSelectedGroup(null);
-    setUnitId("");
+    setManualGroup(null);
+    setManualUnitId("");
     setType("corrective");
     setPriority("medium");
     setScheduledAt("");
@@ -290,8 +305,8 @@ export default function MaintenancePage() {
                     value={assetSearch}
                     onChange={(e) => {
                       setAssetSearch(e.target.value);
-                      setSelectedGroup(null);
-                      setUnitId("");
+                      setManualGroup(null);
+                      setManualUnitId("");
                     }}
                     placeholder="Search by description or code"
                   />
@@ -308,8 +323,8 @@ export default function MaintenancePage() {
                       const group = assetGroups?.find(
                         (g) => `${g.location_id}|${g.department_id}|${g.category_item_id}|${g.description}` === e.target.value,
                       );
-                      setSelectedGroup(group ?? null);
-                      setUnitId("");
+                      setManualGroup(group ?? null);
+                      setManualUnitId("");
                     }}
                     className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
                   >
@@ -329,7 +344,7 @@ export default function MaintenancePage() {
                     <Label className="mb-1.5 text-[12.5px] font-semibold">Unit</Label>
                     <select
                       value={unitId}
-                      onChange={(e) => setUnitId(e.target.value)}
+                      onChange={(e) => setManualUnitId(e.target.value)}
                       className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
                     >
                       <option value="">{isLoadingUnits ? "Loading units…" : "Select unit"}</option>
@@ -471,5 +486,13 @@ export default function MaintenancePage() {
         </DialogContent>
       </Dialog>
     </PageContainer>
+  );
+}
+
+export default function MaintenancePage() {
+  return (
+    <Suspense>
+      <MaintenanceContent />
+    </Suspense>
   );
 }

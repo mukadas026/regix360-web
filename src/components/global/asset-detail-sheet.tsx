@@ -1,16 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "react-hot-toast";
-import { getAsset, updateAsset } from "@/api";
+import { useQuery } from "@tanstack/react-query";
+import { getAsset } from "@/api";
 import type { AssetStatus, Condition } from "@/types/asset-platform";
 import { AssetCodeChip } from "@/components/global/asset-code-chip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useSession } from "@/providers/session-provider";
 
 const conditionBadgeVariant: Record<Condition, "default" | "secondary" | "destructive"> = {
   good: "default",
@@ -35,25 +32,17 @@ function formatMoney(value: number | null) {
   return `GHS ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/**
+ * Read-only unit detail + condition/transfer history. Actions (edit
+ * details, adjust condition, change custodian, update status, transfer,
+ * maintenance, disposal) live on the asset group page's per-unit menu —
+ * this sheet is deliberately just a viewer, opened from "View history".
+ */
 export function AssetDetailSheet({ assetId, onClose }: { assetId: string | null; onClose: () => void }) {
-  const { canEdit } = useSession();
-  const queryClient = useQueryClient();
-  const [editingCondition, setEditingCondition] = useState(false);
-
   const { data: asset, isPending } = useQuery({
     queryKey: getAsset.key(assetId ?? ""),
     queryFn: () => getAsset.fn(assetId as string),
     enabled: Boolean(assetId),
-  });
-
-  const { mutate: mutateCondition, isPending: savingCondition } = useMutation({
-    mutationFn: (condition: Condition) => updateAsset.fn(assetId as string, { condition }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getAsset.key(assetId ?? "") });
-      queryClient.invalidateQueries({ queryKey: ["assets"] });
-      toast("Condition updated");
-      setEditingCondition(false);
-    },
   });
 
   return (
@@ -141,25 +130,12 @@ export function AssetDetailSheet({ assetId, onClose }: { assetId: string | null;
                 </div>
               </div>
 
-              {editingCondition && canEdit && (
+              {asset.notes && (
                 <div className="mb-6 rounded-xl border border-border px-4 py-3.5">
-                  <div className="mb-2.5 text-[11px] font-semibold tracking-[0.07em] text-muted-foreground uppercase">
-                    Set condition
+                  <div className="mb-1.5 text-[11px] font-semibold tracking-[0.07em] text-muted-foreground uppercase">
+                    Notes
                   </div>
-                  <div className="flex gap-2">
-                    {(["good", "fair", "bad"] as Condition[]).map((c) => (
-                      <Button
-                        key={c}
-                        size="sm"
-                        variant={asset.condition === c ? "default" : "outline"}
-                        disabled={savingCondition}
-                        onClick={() => mutateCondition(c)}
-                        className="flex-1 capitalize"
-                      >
-                        {c}
-                      </Button>
-                    ))}
-                  </div>
+                  <p className="text-sm whitespace-pre-wrap">{asset.notes}</p>
                 </div>
               )}
 
@@ -218,27 +194,6 @@ export function AssetDetailSheet({ assetId, onClose }: { assetId: string | null;
               <Button variant="outline" className="flex-1" onClick={() => window.open(`/labels/${asset.id}`, "_blank")}>
                 Print label
               </Button>
-              {canEdit && (
-                <>
-                  <Button variant="outline" className="flex-1" onClick={() => toast("Edit — not wired up yet")}>
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setEditingCondition((v) => !v)}
-                  >
-                    Adjust condition
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="text-status-bad"
-                    onClick={() => toast("Delete — not wired up yet")}
-                  >
-                    Delete
-                  </Button>
-                </>
-              )}
             </div>
           </>
         )}
