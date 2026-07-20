@@ -22,9 +22,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSession } from "@/providers/session-provider";
@@ -185,25 +182,15 @@ function UnitsContent() {
                     <MoreHorizontal size={15} />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuItem onClick={() => setHistoryUnitId(unit.id)}>View history</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setEditUnitId(unit.id)}>Edit details</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger>Adjust condition</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                      {conditionOptions.map((c) => (
-                        <DropdownMenuItem
-                          key={c}
-                          disabled={c === unit.condition}
-                          onClick={() => setConditionTarget({ id: unit.id, code: unit.code, condition: c })}
-                          className="capitalize"
-                        >
-                          {c}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
+                  <DropdownMenuItem
+                    onClick={() => setConditionTarget({ id: unit.id, code: unit.code, condition: unit.condition })}
+                  >
+                    Adjust condition
+                  </DropdownMenuItem>
                   {isAdmin && (
                     <DropdownMenuItem
                       onClick={() =>
@@ -280,13 +267,34 @@ function UnitsContent() {
         <AppDialog
           open={Boolean(conditionTarget)}
           onOpenChange={(open) => !open && setConditionTarget(null)}
-          kind="confirm"
-          severity="warning"
-          title={`Set condition to ${conditionTarget.condition}?`}
-          description={`This updates ${conditionTarget.code}'s condition record.`}
-          isConfirming={savingCondition}
-          onConfirm={() => mutateCondition({ id: conditionTarget.id, condition: conditionTarget.condition })}
-        />
+          kind="modal"
+          title={`Adjust condition — ${conditionTarget.code}`}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setConditionTarget(null)} disabled={savingCondition}>
+                Cancel
+              </Button>
+              <Button
+                disabled={savingCondition}
+                onClick={() => mutateCondition({ id: conditionTarget.id, condition: conditionTarget.condition })}
+              >
+                Save
+              </Button>
+            </>
+          }
+        >
+          <select
+            value={conditionTarget.condition}
+            onChange={(e) => setConditionTarget({ ...conditionTarget, condition: e.target.value as Condition })}
+            className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
+          >
+            {conditionOptions.map((c) => (
+              <option key={c} value={c} className="capitalize">
+                {c}
+              </option>
+            ))}
+          </select>
+        </AppDialog>
       )}
 
       {custodianTarget && (

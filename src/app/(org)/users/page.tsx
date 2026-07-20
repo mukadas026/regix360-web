@@ -3,11 +3,12 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { X } from "lucide-react";
+import { MoreHorizontal, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { getOrgUsers, inviteUser, revokeInvite, updateMember } from "@/api";
 import type { ApiError } from "@/api";
 import type { OrgUser, Role } from "@/types/asset-platform";
+import { AppDialog } from "@/components/global/app-dialog";
 import { DataTable, createSortableHeader } from "@/components/global/data-table";
 import { PageContainer } from "@/components/global/page-container";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/providers/session-provider";
@@ -56,19 +63,36 @@ export default function UsersPage() {
     onError: (error) => toast(getErrorMessage(error)),
   });
 
-  const { mutate: mutateMember } = useMutation({
-    mutationFn: updateMember.fn,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getOrgUsers.key });
-    },
-    onError: (error) => toast(getErrorMessage(error)),
-  });
-
   const { mutate: cancelInvite } = useMutation({
     mutationFn: revokeInvite.fn,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: getOrgUsers.key });
       toast("Invite revoked");
+    },
+    onError: (error) => toast(getErrorMessage(error)),
+  });
+
+  const [roleTarget, setRoleTarget] = useState<{ membershipId: string; name: string; role: Role } | null>(null);
+  const [activeTarget, setActiveTarget] = useState<{ membershipId: string; name: string; isActive: boolean } | null>(
+    null,
+  );
+
+  const { mutate: saveRole, isPending: isSavingRole } = useMutation({
+    mutationFn: updateMember.fn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getOrgUsers.key });
+      toast("Role updated");
+      setRoleTarget(null);
+    },
+    onError: (error) => toast(getErrorMessage(error)),
+  });
+
+  const { mutate: saveActive, isPending: isSavingActive } = useMutation({
+    mutationFn: updateMember.fn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: getOrgUsers.key });
+      toast(activeTarget?.isActive ? "User deactivated" : "User activated");
+      setActiveTarget(null);
     },
     onError: (error) => toast(getErrorMessage(error)),
   });
@@ -114,23 +138,7 @@ export default function UsersPage() {
             options: Object.entries(roleLabels).map(([value, label]) => ({ label, value })),
           },
         },
-        cell: ({ row }) =>
-          isAdmin ? (
-            <select
-              value={row.original.role}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => mutateMember({ membershipId: row.original.membership_id, role: e.target.value as Role })}
-              className="h-7 rounded-md border border-input bg-card px-2 text-[12.5px] font-medium"
-            >
-              {Object.entries(roleLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="text-[13px]">{roleLabels[row.original.role]}</span>
-          ),
+        cell: ({ row }) => <span className="text-[13px]">{roleLabels[row.original.role]}</span>,
       },
       {
         accessorKey: "is_active",
@@ -163,21 +171,45 @@ export default function UsersPage() {
               id: "actions",
               header: "",
               cell: ({ row }: { row: { original: OrgUser } }) => (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    mutateMember({ membershipId: row.original.membership_id, isActive: !row.original.is_active });
-                  }}
-                  className="text-[12.5px] font-semibold text-accent-foreground"
-                >
-                  {row.original.is_active ? "Deactivate" : "Activate"}
-                </button>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon-sm" title="More actions">
+                        <MoreHorizontal size={15} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem
+                        onClick={() =>
+                          setRoleTarget({
+                            membershipId: row.original.membership_id,
+                            name: row.original.full_name ?? row.original.email,
+                            role: row.original.role,
+                          })
+                        }
+                      >
+                        Change role
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          setActiveTarget({
+                            membershipId: row.original.membership_id,
+                            name: row.original.full_name ?? row.original.email,
+                            isActive: row.original.is_active,
+                          })
+                        }
+                      >
+                        {row.original.is_active ? "Deactivate" : "Activate"}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               ),
             },
           ]
         : []),
     ],
-    [isAdmin, mutateMember],
+    [isAdmin],
   );
 
   return (
@@ -260,6 +292,59 @@ export default function UsersPage() {
             ))}
           </div>
         </div>
+      )}
+
+      {roleTarget && (
+        <AppDialog
+          open={Boolean(roleTarget)}
+          onOpenChange={(open) => !open && setRoleTarget(null)}
+          kind="modal"
+          title={`Change role — ${roleTarget.name}`}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setRoleTarget(null)} disabled={isSavingRole}>
+                Cancel
+              </Button>
+              <Button
+                disabled={isSavingRole}
+                onClick={() => saveRole({ membershipId: roleTarget.membershipId, role: roleTarget.role })}
+              >
+                Save
+              </Button>
+            </>
+          }
+        >
+          <select
+            value={roleTarget.role}
+            onChange={(e) => setRoleTarget({ ...roleTarget, role: e.target.value as Role })}
+            className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
+          >
+            {Object.entries(roleLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </AppDialog>
+      )}
+
+      {activeTarget && (
+        <AppDialog
+          open={Boolean(activeTarget)}
+          onOpenChange={(open) => !open && setActiveTarget(null)}
+          kind="confirm"
+          severity={activeTarget.isActive ? "warning" : "info"}
+          title={activeTarget.isActive ? `Deactivate ${activeTarget.name}?` : `Activate ${activeTarget.name}?`}
+          description={
+            activeTarget.isActive
+              ? "They will immediately lose access to this organization."
+              : "They will regain access to this organization."
+          }
+          isConfirming={isSavingActive}
+          onConfirm={() =>
+            saveActive({ membershipId: activeTarget.membershipId, isActive: !activeTarget.isActive })
+          }
+        />
       )}
     </PageContainer>
   );
