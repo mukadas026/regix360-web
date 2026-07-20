@@ -338,10 +338,8 @@ export type Org = {
 
 export type CategoryOption = {
   id: string;
-  item_description: string;
-  category: string;
-  item_code: string;
-  score?: number;
+  name: string;
+  code: string;
 };
 
 export type ActivityLogEntry = {

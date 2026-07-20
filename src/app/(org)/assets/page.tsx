@@ -387,7 +387,7 @@ function RegisterContent() {
             <option value="">All categories</option>
             {categoriesData?.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.item_description}
+                {c.name}
               </option>
             ))}
           </select>

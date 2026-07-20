@@ -16,9 +16,8 @@ export const getCategories = {
 };
 
 export type AddCategoryInput = {
-  itemDescription: string;
-  category: string;
-  itemCode: string;
+  name: string;
+  code: string;
 };
 
 export const addCategory = {
@@ -34,8 +33,7 @@ export const addCategory = {
 
 export type UpdateCategoryInput = {
   id: string;
-  itemDescription?: string;
-  category?: string;
+  name?: string;
   isActive?: boolean;
 };
 

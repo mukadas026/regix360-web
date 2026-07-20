@@ -43,13 +43,11 @@ export default function CategoriesPage() {
 
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [itemDescription, setItemDescription] = useState("");
-  const [category, setCategory] = useState("");
-  const [itemCode, setItemCode] = useState("");
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
 
   const [editing, setEditing] = useState<CategoryOption | null>(null);
-  const [editDescription, setEditDescription] = useState("");
-  const [editCategory, setEditCategory] = useState("");
+  const [editName, setEditName] = useState("");
 
   const { mutate, isPending: isSaving } = useMutation({
     mutationFn: addCategory.fn,
@@ -57,9 +55,8 @@ export default function CategoriesPage() {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       toast("Category added");
       setOpen(false);
-      setItemDescription("");
-      setCategory("");
-      setItemCode("");
+      setName("");
+      setCode("");
     },
     onError: (error) => toast((error as ApiError).message ?? "Could not add category."),
   });
@@ -84,28 +81,17 @@ export default function CategoriesPage() {
   });
 
   const filtered = useMemo(
-    () =>
-      (categories ?? []).filter(
-        (c) =>
-          !search ||
-          c.item_description.toLowerCase().includes(search.toLowerCase()) ||
-          c.category.toLowerCase().includes(search.toLowerCase()),
-      ),
+    () => (categories ?? []).filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase())),
     [categories, search],
   );
 
   const columns = useMemo<ColumnDef<CategoryOption>[]>(
     () => [
-      { accessorKey: "item_code", header: "Code", cell: ({ row }) => <span className="font-mono text-[12.5px]">{row.original.item_code}</span> },
+      { accessorKey: "code", header: "Code", cell: ({ row }) => <span className="font-mono text-[12.5px]">{row.original.code}</span> },
       {
-        accessorKey: "item_description",
-        header: createSortableHeader("Description"),
-        cell: ({ row }) => <span className="text-[13.5px] font-medium">{row.original.item_description}</span>,
-      },
-      {
-        accessorKey: "category",
-        header: createSortableHeader("Category"),
-        cell: ({ row }) => <span className="text-[13px] text-muted-foreground">{row.original.category}</span>,
+        accessorKey: "name",
+        header: createSortableHeader("Name"),
+        cell: ({ row }) => <span className="text-[13.5px] font-medium">{row.original.name}</span>,
       },
       {
         id: "actions",
@@ -117,8 +103,7 @@ export default function CategoriesPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   setEditing(row.original);
-                  setEditDescription(row.original.item_description);
-                  setEditCategory(row.original.category);
+                  setEditName(row.original.name);
                 }}
                 className="text-muted-foreground/50 hover:text-foreground"
               >
@@ -150,33 +135,18 @@ export default function CategoriesPage() {
               </DialogHeader>
               <div className="space-y-3.5">
                 <div>
-                  <Label className="mb-1.5 text-[12.5px] font-semibold">Description</Label>
-                  <Input
-                    value={itemDescription}
-                    onChange={(e) => setItemDescription(e.target.value)}
-                    placeholder="e.g. Ceiling fan"
-                  />
-                </div>
-                <div>
-                  <Label className="mb-1.5 text-[12.5px] font-semibold">Category</Label>
-                  <Input
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    placeholder="e.g. Electrical & Cooling"
-                  />
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Electricals" />
                 </div>
                 <div>
                   <Label className="mb-1.5 text-[12.5px] font-semibold">
                     Code <span className="font-normal text-muted-foreground">— 2-6 letters/numbers, permanent</span>
                   </Label>
-                  <Input value={itemCode} onChange={(e) => setItemCode(e.target.value.toUpperCase())} placeholder="e.g. CFAN" maxLength={6} />
+                  <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. ELEC" maxLength={6} />
                 </div>
               </div>
               <DialogFooter>
-                <Button
-                  disabled={!itemDescription || !category || !itemCode || isSaving}
-                  onClick={() => mutate({ itemDescription, category, itemCode })}
-                >
+                <Button disabled={!name || !code || isSaving} onClick={() => mutate({ name, code })}>
                   Add category
                 </Button>
               </DialogFooter>
@@ -206,26 +176,22 @@ export default function CategoriesPage() {
           </DialogHeader>
           <div className="space-y-3.5">
             <div>
-              <Label className="mb-1.5 text-[12.5px] font-semibold">Description</Label>
-              <Input value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
-            </div>
-            <div>
-              <Label className="mb-1.5 text-[12.5px] font-semibold">Category</Label>
-              <Input value={editCategory} onChange={(e) => setEditCategory(e.target.value)} />
+              <Label className="mb-1.5 text-[12.5px] font-semibold">Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
             </div>
             <div>
               <Label className="mb-1.5 text-[12.5px] font-semibold">
                 Code <span className="font-normal text-muted-foreground">— permanent</span>
               </Label>
-              <Input value={editing?.item_code ?? ""} disabled />
+              <Input value={editing?.code ?? ""} disabled />
             </div>
           </div>
           <DialogFooter>
             <Button
-              disabled={!editDescription || !editCategory || isEditSaving}
+              disabled={!editName || isEditSaving}
               onClick={() => {
                 if (!editing) return;
-                saveEdit({ id: editing.id, itemDescription: editDescription, category: editCategory });
+                saveEdit({ id: editing.id, name: editName });
               }}
             >
               Save changes
@@ -253,7 +219,7 @@ function DeleteCategoryButton({ category, onConfirm }: { category: CategoryOptio
       </button>
       <AlertDialogContent onClick={(e) => e.stopPropagation()}>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete {category.item_description}?</AlertDialogTitle>
+          <AlertDialogTitle>Delete {category.name}?</AlertDialogTitle>
           <AlertDialogDescription>
             This can&apos;t be undone. Categories used by assets can&apos;t be deleted — reassign them first.
           </AlertDialogDescription>

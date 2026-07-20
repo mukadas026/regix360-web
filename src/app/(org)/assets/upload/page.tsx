@@ -554,7 +554,7 @@ function CategoryPicker({ value, onChange }: { value?: string; onChange: (itemId
 
   const selectedLabel = useMemo(() => {
     if (!value) return null;
-    return (options ?? []).find((o) => o.id === value)?.item_description ?? null;
+    return (options ?? []).find((o) => o.id === value)?.name ?? null;
   }, [options, value]);
 
   return (
@@ -580,10 +580,8 @@ function CategoryPicker({ value, onChange }: { value?: string; onChange: (itemId
                   }}
                 >
                   <div className="flex flex-col">
-                    <span className="text-[13px]">{option.item_description}</span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {option.category} · {option.item_code}
-                    </span>
+                    <span className="text-[13px]">{option.name}</span>
+                    <span className="text-[11px] text-muted-foreground">{option.code}</span>
                   </div>
                 </CommandItem>
               ))}

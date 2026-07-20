@@ -118,7 +118,7 @@ export default function AddAssetPage() {
         <Label className="mb-1.5 text-[12.5px] font-semibold">Category</Label>
         <div className="relative mb-3.5">
           <Input
-            value={selectedCategory ? `${selectedCategory.item_description} — ${selectedCategory.category}` : categorySearch}
+            value={selectedCategory ? selectedCategory.name : categorySearch}
             onChange={(e) => {
               setSelectedCategory(null);
               setCategorySearch(e.target.value);
@@ -141,11 +141,9 @@ export default function AddAssetPage() {
                   }}
                   className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13px] hover:bg-secondary"
                 >
-                  <span>
-                    {c.item_description} <span className="text-muted-foreground">— {c.category}</span>
-                  </span>
+                  <span>{c.name}</span>
                   <span className="rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-[10.5px]">
-                    {c.item_code}
+                    {c.code}
                   </span>
                 </button>
               ))}
@@ -155,8 +153,8 @@ export default function AddAssetPage() {
         {selectedCategory && (
           <div className="mb-3.5 flex items-center gap-2 rounded-md border border-[#CFE0F7] bg-accent px-3 py-2 text-[13px] text-accent-foreground">
             <span className="font-semibold">Matched in dictionary:</span>
-            <span>{selectedCategory.category}</span>
-            <span className="rounded border border-[#CFE0F7] bg-card px-1.5 py-0.5 font-mono">{selectedCategory.item_code}</span>
+            <span>{selectedCategory.name}</span>
+            <span className="rounded border border-[#CFE0F7] bg-card px-1.5 py-0.5 font-mono">{selectedCategory.code}</span>
           </div>
         )}
 
