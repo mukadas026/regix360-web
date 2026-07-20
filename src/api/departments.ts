@@ -2,12 +2,10 @@ import { client, throwError } from "./client";
 import type { Department } from "@/types/asset-platform";
 
 export const getDepartments = {
-  key: (locationId?: string) => ["departments", locationId ?? null] as const,
-  fn: async (locationId?: string): Promise<Department[]> => {
+  key: ["departments"] as const,
+  fn: async (): Promise<Department[]> => {
     try {
-      const res = await client.get<{ departments: Department[] }>("/api/departments", {
-        params: locationId ? { locationId } : undefined,
-      });
+      const res = await client.get<{ departments: Department[] }>("/api/departments");
       return res.data.departments;
     } catch (error) {
       throwError(error);
@@ -16,7 +14,6 @@ export const getDepartments = {
 };
 
 export type AddDepartmentInput = {
-  locationId: string;
   name: string;
   code: string;
 };

@@ -5,9 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { addDepartment, deleteDepartment, getDepartments, updateDepartment } from "@/api";
+import { addCategory, deleteCategory, getCategories, updateCategory } from "@/api";
 import type { ApiError } from "@/api";
-import type { Department } from "@/types/asset-platform";
+import type { CategoryOption } from "@/types/asset-platform";
 import { DataTable, createSortableHeader } from "@/components/global/data-table";
 import { PageContainer } from "@/components/global/page-container";
 import {
@@ -33,68 +33,79 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/providers/session-provider";
 
-export default function DepartmentsPage() {
+export default function CategoriesPage() {
   const { canEdit } = useSession();
   const queryClient = useQueryClient();
-  const { data: departments, isPending } = useQuery({ queryKey: getDepartments.key, queryFn: () => getDepartments.fn() });
+  const { data: categories, isPending } = useQuery({
+    queryKey: getCategories.key(""),
+    queryFn: () => getCategories.fn(""),
+  });
 
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
+  const [itemDescription, setItemDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [itemCode, setItemCode] = useState("");
 
-  const [editing, setEditing] = useState<Department | null>(null);
-  const [editName, setEditName] = useState("");
+  const [editing, setEditing] = useState<CategoryOption | null>(null);
+  const [editDescription, setEditDescription] = useState("");
+  const [editCategory, setEditCategory] = useState("");
 
   const { mutate, isPending: isSaving } = useMutation({
-    mutationFn: addDepartment.fn,
+    mutationFn: addCategory.fn,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getDepartments.key });
-      toast("Department added");
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast("Category added");
       setOpen(false);
-      setName("");
-      setCode("");
+      setItemDescription("");
+      setCategory("");
+      setItemCode("");
     },
-    onError: (error) => toast((error as ApiError).message ?? "Could not add department."),
+    onError: (error) => toast((error as ApiError).message ?? "Could not add category."),
   });
 
   const { mutate: saveEdit, isPending: isEditSaving } = useMutation({
-    mutationFn: updateDepartment.fn,
+    mutationFn: updateCategory.fn,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getDepartments.key });
-      toast("Department updated");
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast("Category updated");
       setEditing(null);
     },
-    onError: (error) => toast((error as ApiError).message ?? "Could not update department."),
+    onError: (error) => toast((error as ApiError).message ?? "Could not update category."),
   });
 
   const { mutate: remove } = useMutation({
-    mutationFn: deleteDepartment.fn,
+    mutationFn: deleteCategory.fn,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getDepartments.key });
-      toast("Department deleted");
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast("Category deleted");
     },
-    onError: (error) => toast((error as ApiError).message ?? "Could not delete department."),
+    onError: (error) => toast((error as ApiError).message ?? "Could not delete category."),
   });
 
   const filtered = useMemo(
-    () => (departments ?? []).filter((d) => !search || d.name.toLowerCase().includes(search.toLowerCase())),
-    [departments, search],
+    () =>
+      (categories ?? []).filter(
+        (c) =>
+          !search ||
+          c.item_description.toLowerCase().includes(search.toLowerCase()) ||
+          c.category.toLowerCase().includes(search.toLowerCase()),
+      ),
+    [categories, search],
   );
 
-  const columns = useMemo<ColumnDef<Department>[]>(
+  const columns = useMemo<ColumnDef<CategoryOption>[]>(
     () => [
-      { accessorKey: "code", header: "Code", cell: ({ row }) => <span className="font-mono text-[12.5px]">{row.original.code}</span> },
-      { accessorKey: "name", header: createSortableHeader("Name"), cell: ({ row }) => <span className="text-[13.5px] font-medium">{row.original.name}</span> },
+      { accessorKey: "item_code", header: "Code", cell: ({ row }) => <span className="font-mono text-[12.5px]">{row.original.item_code}</span> },
       {
-        accessorKey: "asset_lines",
-        header: () => <div className="text-right">Assets</div>,
-        cell: ({ row }) => <div className="text-right font-mono text-[13px]">{row.original.asset_lines}</div>,
+        accessorKey: "item_description",
+        header: createSortableHeader("Description"),
+        cell: ({ row }) => <span className="text-[13.5px] font-medium">{row.original.item_description}</span>,
       },
       {
-        accessorKey: "created_at",
-        header: "Created",
-        cell: ({ row }) => <span className="font-mono text-[12.5px] text-muted-foreground">{row.original.created_at}</span>,
+        accessorKey: "category",
+        header: createSortableHeader("Category"),
+        cell: ({ row }) => <span className="text-[13px] text-muted-foreground">{row.original.category}</span>,
       },
       {
         id: "actions",
@@ -106,13 +117,14 @@ export default function DepartmentsPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   setEditing(row.original);
-                  setEditName(row.original.name);
+                  setEditDescription(row.original.item_description);
+                  setEditCategory(row.original.category);
                 }}
                 className="text-muted-foreground/50 hover:text-foreground"
               >
                 <Pencil size={15} />
               </button>
-              <DeleteDepartmentButton department={row.original} onConfirm={() => remove(row.original.id)} />
+              <DeleteCategoryButton category={row.original} onConfirm={() => remove(row.original.id)} />
             </div>
           ) : null,
       },
@@ -124,36 +136,48 @@ export default function DepartmentsPage() {
     <PageContainer>
       <div className="mb-[18px] flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="mb-1 font-heading text-2xl font-semibold tracking-tight">Departments</h1>
-          <p className="text-sm text-muted-foreground">Manage your organization&apos;s departments</p>
+          <h1 className="mb-1 font-heading text-2xl font-semibold tracking-tight">Categories</h1>
+          <p className="text-sm text-muted-foreground">Manage your organization&apos;s category dictionary</p>
         </div>
         {canEdit && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button>Add department</Button>
+              <Button>Add category</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add department</DialogTitle>
+                <DialogTitle>Add category</DialogTitle>
               </DialogHeader>
               <div className="space-y-3.5">
                 <div>
-                  <Label className="mb-1.5 text-[12.5px] font-semibold">Name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Media & Sound" />
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">Description</Label>
+                  <Input
+                    value={itemDescription}
+                    onChange={(e) => setItemDescription(e.target.value)}
+                    placeholder="e.g. Ceiling fan"
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">Category</Label>
+                  <Input
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    placeholder="e.g. Electrical & Cooling"
+                  />
                 </div>
                 <div>
                   <Label className="mb-1.5 text-[12.5px] font-semibold">
                     Code <span className="font-normal text-muted-foreground">— 2-6 letters/numbers, permanent</span>
                   </Label>
-                  <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="e.g. MED" maxLength={6} />
+                  <Input value={itemCode} onChange={(e) => setItemCode(e.target.value.toUpperCase())} placeholder="e.g. CFAN" maxLength={6} />
                 </div>
               </div>
               <DialogFooter>
                 <Button
-                  disabled={!name || !code || isSaving}
-                  onClick={() => mutate({ name, code })}
+                  disabled={!itemDescription || !category || !itemCode || isSaving}
+                  onClick={() => mutate({ itemDescription, category, itemCode })}
                 >
-                  Add department
+                  Add category
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -167,37 +191,41 @@ export default function DepartmentsPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search departments..."
+            placeholder="Search categories..."
             className="flex-1 border-none bg-transparent text-[13.5px] outline-none"
           />
         </div>
       </div>
 
-      <DataTable data={filtered} columns={columns} isLoading={isPending} pageSize={20} emptyTitle="No departments yet" />
+      <DataTable data={filtered} columns={columns} isLoading={isPending} pageSize={20} emptyTitle="No categories yet" />
 
       <Dialog open={editing !== null} onOpenChange={(next) => !next && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit department</DialogTitle>
+            <DialogTitle>Edit category</DialogTitle>
           </DialogHeader>
           <div className="space-y-3.5">
             <div>
-              <Label className="mb-1.5 text-[12.5px] font-semibold">Name</Label>
-              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+              <Label className="mb-1.5 text-[12.5px] font-semibold">Description</Label>
+              <Input value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+            </div>
+            <div>
+              <Label className="mb-1.5 text-[12.5px] font-semibold">Category</Label>
+              <Input value={editCategory} onChange={(e) => setEditCategory(e.target.value)} />
             </div>
             <div>
               <Label className="mb-1.5 text-[12.5px] font-semibold">
                 Code <span className="font-normal text-muted-foreground">— permanent</span>
               </Label>
-              <Input value={editing?.code ?? ""} disabled />
+              <Input value={editing?.item_code ?? ""} disabled />
             </div>
           </div>
           <DialogFooter>
             <Button
-              disabled={!editName || isEditSaving}
+              disabled={!editDescription || !editCategory || isEditSaving}
               onClick={() => {
                 if (!editing) return;
-                saveEdit({ id: editing.id, name: editName });
+                saveEdit({ id: editing.id, itemDescription: editDescription, category: editCategory });
               }}
             >
               Save changes
@@ -209,7 +237,7 @@ export default function DepartmentsPage() {
   );
 }
 
-function DeleteDepartmentButton({ department, onConfirm }: { department: Department; onConfirm: () => void }) {
+function DeleteCategoryButton({ category, onConfirm }: { category: CategoryOption; onConfirm: () => void }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -225,9 +253,9 @@ function DeleteDepartmentButton({ department, onConfirm }: { department: Departm
       </button>
       <AlertDialogContent onClick={(e) => e.stopPropagation()}>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete {department.name}?</AlertDialogTitle>
+          <AlertDialogTitle>Delete {category.item_description}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This can&apos;t be undone. Departments holding asset lines can&apos;t be deleted — move them first.
+            This can&apos;t be undone. Categories used by assets can&apos;t be deleted — reassign them first.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

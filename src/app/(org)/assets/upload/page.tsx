@@ -92,7 +92,7 @@ export default function UploadAssetsPage() {
   const [departmentCodes, setDepartmentCodes] = useState<Record<string, string>>({});
 
   const { data: existingDepartments } = useQuery({
-    queryKey: getDepartments.key(),
+    queryKey: getDepartments.key,
     queryFn: () => getDepartments.fn(),
     enabled: step === "preview",
   });

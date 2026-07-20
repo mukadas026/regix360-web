@@ -14,3 +14,49 @@ export const getCategories = {
     }
   },
 };
+
+export type AddCategoryInput = {
+  itemDescription: string;
+  category: string;
+  itemCode: string;
+};
+
+export const addCategory = {
+  fn: async (input: AddCategoryInput): Promise<CategoryOption> => {
+    try {
+      const res = await client.post<{ category: CategoryOption }>("/api/categories", input);
+      return res.data.category;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
+
+export type UpdateCategoryInput = {
+  id: string;
+  itemDescription?: string;
+  category?: string;
+  isActive?: boolean;
+};
+
+export const updateCategory = {
+  fn: async ({ id, ...fields }: UpdateCategoryInput): Promise<CategoryOption> => {
+    try {
+      const res = await client.patch<{ category: CategoryOption }>(`/api/categories/${id}`, fields);
+      return res.data.category;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
+
+export const deleteCategory = {
+  fn: async (id: string): Promise<{ ok: true }> => {
+    try {
+      const res = await client.delete<{ ok: true }>(`/api/categories/${id}`);
+      return res.data;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};

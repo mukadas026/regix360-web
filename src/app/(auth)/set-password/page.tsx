@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
+import { AuthIllustrationPanel } from "@/components/global/auth-illustration-panel";
 
 function readInviteToken() {
   if (typeof window === "undefined") return null;
@@ -39,88 +40,94 @@ export default function SetPasswordPage() {
 
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-secondary p-6">
-        <div className="w-full max-w-[380px] rounded-lg border border-border bg-card p-[30px] text-center">
-          <h1 className="mb-1.5 font-heading text-lg font-semibold">Invite link not found</h1>
-          <p className="text-sm text-muted-foreground">
-            This link is missing or expired. Ask your administrator to send a new invite.
-          </p>
+      <div className="flex min-h-screen flex-row-reverse">
+        <AuthIllustrationPanel />
+        <div className="flex flex-1 items-center justify-center bg-secondary p-6 lg:bg-background">
+          <div className="w-full max-w-[380px] rounded-lg border border-border bg-card p-[30px] text-center lg:border-none">
+            <h1 className="mb-1.5 font-heading text-lg font-semibold">Invite link not found</h1>
+            <p className="text-sm text-muted-foreground">
+              This link is missing or expired. Ask your administrator to send a new invite.
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-secondary p-6">
-      <div className="w-full max-w-[380px]">
-        <div className="mb-7">
-          <Image src="/logo.png" alt="Regix360" width={2111} height={524} className="h-8 w-auto" priority />
+    <div className="flex min-h-screen flex-row-reverse">
+      <AuthIllustrationPanel />
+      <div className="flex flex-1 items-center justify-center bg-secondary p-6 lg:bg-background">
+        <div className="w-full max-w-[380px]">
+          <div className="mb-7">
+            <Image src="/logo.png" alt="Regix360" width={2111} height={524} className="h-8 w-auto" priority />
+          </div>
+          <form
+            className="rounded-lg border border-border bg-card p-[30px] lg:border-none lg:p-0"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setError(null);
+              if (password.length < 8) {
+                setError("Password must be at least 8 characters.");
+                return;
+              }
+              if (password !== confirmPassword) {
+                setError("Passwords don't match.");
+                return;
+              }
+              mutate({ password, fullName: fullName || undefined });
+            }}
+          >
+            <h1 className="mb-1 font-heading text-[22px] font-semibold tracking-tight">Set your password</h1>
+            <p className="mb-[22px] text-sm text-muted-foreground">Finish setting up your account to continue.</p>
+
+            {error && (
+              <div className="mb-4 rounded-md border border-status-bad/30 bg-status-bad/10 px-3 py-2 text-[13px] text-status-bad">
+                {error}
+              </div>
+            )}
+
+            <Label htmlFor="fullName" className="mb-1.5 text-xs font-semibold">
+              Full name <span className="font-normal text-muted-foreground">— optional</span>
+            </Label>
+            <Input
+              id="fullName"
+              placeholder="e.g. Ama Mensah"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="mb-4"
+            />
+
+            <Label htmlFor="password" className="mb-1.5 text-xs font-semibold">
+              Password
+            </Label>
+            <PasswordInput
+              id="password"
+              required
+              minLength={8}
+              placeholder="At least 8 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mb-4"
+            />
+
+            <Label htmlFor="confirmPassword" className="mb-1.5 text-xs font-semibold">
+              Confirm password
+            </Label>
+            <PasswordInput
+              id="confirmPassword"
+              required
+              placeholder="Re-enter password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="mb-5"
+            />
+
+            <Button type="submit" className="w-full" disabled={isPending}>
+              {isPending ? "Setting up…" : "Set password & continue"}
+            </Button>
+          </form>
         </div>
-        <form
-          className="rounded-lg border border-border bg-card p-[30px]"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setError(null);
-            if (password.length < 8) {
-              setError("Password must be at least 8 characters.");
-              return;
-            }
-            if (password !== confirmPassword) {
-              setError("Passwords don't match.");
-              return;
-            }
-            mutate({ password, fullName: fullName || undefined });
-          }}
-        >
-          <h1 className="mb-1 font-heading text-[22px] font-semibold tracking-tight">Set your password</h1>
-          <p className="mb-[22px] text-sm text-muted-foreground">Finish setting up your account to continue.</p>
-
-          {error && (
-            <div className="mb-4 rounded-md border border-status-bad/30 bg-status-bad/10 px-3 py-2 text-[13px] text-status-bad">
-              {error}
-            </div>
-          )}
-
-          <Label htmlFor="fullName" className="mb-1.5 text-xs font-semibold">
-            Full name <span className="font-normal text-muted-foreground">— optional</span>
-          </Label>
-          <Input
-            id="fullName"
-            placeholder="e.g. Ama Mensah"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            className="mb-4"
-          />
-
-          <Label htmlFor="password" className="mb-1.5 text-xs font-semibold">
-            Password
-          </Label>
-          <PasswordInput
-            id="password"
-            required
-            minLength={8}
-            placeholder="At least 8 characters"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mb-4"
-          />
-
-          <Label htmlFor="confirmPassword" className="mb-1.5 text-xs font-semibold">
-            Confirm password
-          </Label>
-          <PasswordInput
-            id="confirmPassword"
-            required
-            placeholder="Re-enter password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="mb-5"
-          />
-
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? "Setting up…" : "Set password & continue"}
-          </Button>
-        </form>
       </div>
     </div>
   );

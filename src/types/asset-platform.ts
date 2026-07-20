@@ -30,14 +30,10 @@ export type Location = {
 
 export type Department = {
   id: string;
-  location_id: string;
   name: string;
   code: string;
   created_at: string;
-  location_name: string;
-  location_code: string;
   asset_lines: number;
-  total_units: number;
 };
 
 // Assets — one row is one PHYSICAL UNIT. The register list is GROUPED

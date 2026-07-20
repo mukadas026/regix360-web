@@ -5,8 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowRight } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { cancelTransfer, client, completeTransfer, getTransfers, initiateTransfer } from "@/api";
-import type { AssetGroup, AssetUnit, Department, Location, Transfer, TransferStatus } from "@/types/asset-platform";
+import { cancelTransfer, client, completeTransfer, getDepartments, getTransfers, initiateTransfer } from "@/api";
+import type { AssetGroup, AssetUnit, Location, Transfer, TransferStatus } from "@/types/asset-platform";
 import { AssetCodeChip } from "@/components/global/asset-code-chip";
 import { DataTable, createSortableHeader } from "@/components/global/data-table";
 import { PageContainer } from "@/components/global/page-container";
@@ -84,14 +84,9 @@ export default function TransfersPage() {
   });
 
   const { data: departments } = useQuery({
-    queryKey: ["transfer-departments", toLocationId],
-    queryFn: async () => {
-      const res = await client.get<{ departments: Department[] }>("/api/departments", {
-        params: { locationId: toLocationId },
-      });
-      return res.data.departments;
-    },
-    enabled: open && Boolean(toLocationId),
+    queryKey: getDepartments.key,
+    queryFn: () => getDepartments.fn(),
+    enabled: open,
   });
 
   // GET /api/users is org_admin-only, so the custodian picker only loads for admins;
@@ -328,10 +323,7 @@ export default function TransfersPage() {
                   <Label className="mb-1.5 text-[12.5px] font-semibold">To location</Label>
                   <select
                     value={toLocationId}
-                    onChange={(e) => {
-                      setToLocationId(e.target.value);
-                      setToDepartmentId("");
-                    }}
+                    onChange={(e) => setToLocationId(e.target.value)}
                     className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
                   >
                     <option value="">Select destination location</option>
@@ -342,23 +334,21 @@ export default function TransfersPage() {
                     ))}
                   </select>
                 </div>
-                {toLocationId && (
-                  <div>
-                    <Label className="mb-1.5 text-[12.5px] font-semibold">To department</Label>
-                    <select
-                      value={toDepartmentId}
-                      onChange={(e) => setToDepartmentId(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
-                    >
-                      <option value="">Select destination department</option>
-                      {departments?.map((dept) => (
-                        <option key={dept.id} value={dept.id}>
-                          {dept.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div>
+                  <Label className="mb-1.5 text-[12.5px] font-semibold">To department</Label>
+                  <select
+                    value={toDepartmentId}
+                    onChange={(e) => setToDepartmentId(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-input bg-card px-3 text-[13px]"
+                  >
+                    <option value="">Select destination department</option>
+                    {departments?.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 {isAdmin && (
                   <div>
                     <Label className="mb-1.5 text-[12.5px] font-semibold">Custodian (optional)</Label>

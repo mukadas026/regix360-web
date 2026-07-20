@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { setCookie } from "cookies-next";
@@ -11,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
+import { AuthIllustrationPanel } from "@/components/global/auth-illustration-panel";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -31,14 +33,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen">
-      <div className="relative hidden flex-1 lg:flex">
-        <Image src="/login-splash.png" alt="" fill priority className="object-cover" />
-        <div className="absolute inset-x-0 top-10 flex justify-center">
-          <div className="flex size-16 items-center justify-center rounded-2xl bg-white shadow-lg">
-            <Image src="/logo-icon.png" alt="" width={44} height={44} />
-          </div>
-        </div>
-      </div>
+      <AuthIllustrationPanel />
 
       <div className="flex flex-1 items-center justify-center bg-secondary p-6 lg:bg-background">
         <div className="w-full max-w-[380px]">
@@ -92,9 +87,9 @@ export default function LoginPage() {
             </Button>
 
             <div className="mt-4 text-center text-[13px]">
-              <a href="#" className="text-accent-foreground hover:underline">
+              <Link href="/forgot-password" className="text-accent-foreground hover:underline">
                 Forgot password
-              </a>
+              </Link>
             </div>
           </form>
         </div>

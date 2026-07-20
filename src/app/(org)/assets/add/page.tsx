@@ -1,13 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
-import { addAsset, getCategories, getLocations } from "@/api";
-import { client } from "@/api/client";
+import { addAsset, getCategories, getDepartments, getLocations } from "@/api";
 import type { AddAssetInput } from "@/api/assets";
-import type { CategoryOption, Department } from "@/types/asset-platform";
+import type { CategoryOption } from "@/types/asset-platform";
 import { PageContainer } from "@/components/global/page-container";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,18 +37,9 @@ export default function AddAssetPage() {
 
   const [locationId, setLocationId] = useState("");
   const [departmentId, setDepartmentId] = useState("");
-  const [departmentResetKey, setDepartmentResetKey] = useState(locationId);
-  if (locationId !== departmentResetKey) {
-    setDepartmentResetKey(locationId);
-    setDepartmentId("");
-  }
   const { data: departments, isFetching: departmentsLoading } = useQuery({
-    queryKey: ["departments", locationId],
-    queryFn: async () => {
-      const res = await client.get<{ departments: Department[] }>("/api/departments", { params: { locationId } });
-      return res.data.departments;
-    },
-    enabled: Boolean(locationId),
+    queryKey: getDepartments.key,
+    queryFn: () => getDepartments.fn(),
   });
 
   const [good, setGood] = useState("");
@@ -103,8 +93,6 @@ export default function AddAssetPage() {
     });
   }
 
-  const locationName = useMemo(() => locations?.find((l) => l.id === locationId)?.name ?? "", [locations, locationId]);
-
   return (
     <PageContainer>
       <button
@@ -119,7 +107,7 @@ export default function AddAssetPage() {
         <div className="mb-3.5 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
           Identity
         </div>
-        <Label className="mb-1.5 text-[12.5px] font-semibold">Description</Label>
+        <Label className="mb-1.5 text-[12.5px] font-semibold">Name</Label>
         <Input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -193,10 +181,10 @@ export default function AddAssetPage() {
             <select
               value={departmentId}
               onChange={(e) => setDepartmentId(e.target.value)}
-              disabled={!locationId || departmentsLoading}
+              disabled={departmentsLoading}
               className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm disabled:opacity-50"
             >
-              <option value="">{locationId ? "Select a department" : `Select ${locationName ? "a" : ""} location first`}</option>
+              <option value="">Select a department</option>
               {departments?.map((dept) => (
                 <option key={dept.id} value={dept.id}>
                   {dept.name}
