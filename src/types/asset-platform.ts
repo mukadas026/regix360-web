@@ -112,7 +112,6 @@ export type AssetDetail = AssetUnit & {
   department_name: string;
   department_code: string;
   category: string;
-  item_description: string;
   item_code: string;
   custom_code: string | null;
   history: ConditionHistoryEntry[];

@@ -3,8 +3,10 @@ import type {
   AssetDetail,
   AssetGroup,
   AssetStatus,
+  AssetTransferSnapshot,
   AssetUnit,
   Condition,
+  ConditionHistoryEntry,
   CreateAssetSummary,
 } from "@/types/asset-platform";
 
@@ -102,12 +104,18 @@ export const addAsset = {
   },
 };
 
+type AssetDetailResponse = {
+  asset: Omit<AssetDetail, "history" | "transfers">;
+  history: ConditionHistoryEntry[];
+  transfers: AssetTransferSnapshot[];
+};
+
 export const getAsset = {
   key: (id: string) => ["asset", id] as const,
-  fn: async (id: string) => {
+  fn: async (id: string): Promise<AssetDetail> => {
     try {
-      const res = await client.get<AssetDetail>(`/api/assets/${id}`);
-      return res.data;
+      const res = await client.get<AssetDetailResponse>(`/api/assets/${id}`);
+      return { ...res.data.asset, history: res.data.history, transfers: res.data.transfers };
     } catch (error) {
       throwError(error);
     }
