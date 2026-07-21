@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { setCookie } from "cookies-next";
 import { acceptInvite } from "@/api";
 import { TOKEN_COOKIE } from "@/api/client";
@@ -22,6 +22,7 @@ function readInviteToken() {
 
 export default function SetPasswordPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [token] = useState(readInviteToken);
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
@@ -34,7 +35,10 @@ export default function SetPasswordPage() {
 
   const { mutate, isPending } = useMutation({
     mutationFn: acceptInvite.fn,
-    onSuccess: () => router.push("/dashboard"),
+    onSuccess: () => {
+      queryClient.clear();
+      router.push("/dashboard");
+    },
     onError: (err) => setError((err as { message?: string })?.message ?? "Something went wrong."),
   });
 

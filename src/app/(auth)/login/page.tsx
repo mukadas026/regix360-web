@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { setCookie } from "cookies-next";
 import { signIn } from "@/api";
 import { TOKEN_COOKIE } from "@/api/client";
@@ -16,6 +16,7 @@ import { AuthIllustrationPanel } from "@/components/global/auth-illustration-pan
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +24,8 @@ export default function LoginPage() {
   const { mutate, isPending } = useMutation({
     mutationFn: signIn.fn,
     onSuccess: (session) => {
+      // Guard against stale cached queries from a previous session in this tab.
+      queryClient.clear();
       setCookie(TOKEN_COOKIE, session.access_token, { maxAge: session.expires_in });
       router.push("/dashboard");
     },

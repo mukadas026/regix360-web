@@ -30,6 +30,21 @@ export const signIn = {
   },
 };
 
+// Revokes the session's refresh token server-side (Supabase Auth's own
+// logout endpoint — this backend has no /api/logout of its own).
+// Best-effort: sign-out proceeds locally even if this call fails.
+export async function signOutRemote(accessToken: string | undefined) {
+  if (!accessToken) return;
+  try {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout?scope=local`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_PUBLISHABLE_KEY ?? "" },
+    });
+  } catch {
+    // ignore — local cookie/cache clearing below still happens
+  }
+}
+
 export const getMe = {
   key: ["me"] as const,
   fn: async (): Promise<Me> => {

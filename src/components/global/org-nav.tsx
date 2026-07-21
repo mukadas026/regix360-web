@@ -2,7 +2,8 @@
 
 import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   ChevronLeft,
@@ -22,11 +23,13 @@ import {
   Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { signOut } from "@/lib/sign-out";
-import { mockOrg } from "@/lib/mock-data";
+import { getOrganization } from "@/api";
+import { initialsFor } from "@/lib/initials";
+import { useSignOutConfirm } from "@/lib/use-sign-out-confirm";
 import { useSession } from "@/providers/session-provider";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { AppDialog } from "@/components/global/app-dialog";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -61,15 +64,22 @@ function getServerCollapsed() {
 }
 
 function OrgIdentity({ collapsed }: { collapsed?: boolean }) {
+  const { data: org } = useQuery({ queryKey: getOrganization.key, queryFn: getOrganization.fn });
+  const name = org?.name ?? "…";
+
   return (
     <div className={cn("flex items-center gap-2.5 px-3 pt-1.5 pb-[18px]", collapsed && "justify-center px-0")}>
-      <div className="flex size-7 flex-none items-center justify-center rounded-lg bg-white font-heading text-sm font-bold text-sidebar">
-        {mockOrg.name.charAt(0)}
-      </div>
+      {org?.logoUrl ? (
+        <img src={org.logoUrl} alt="" className="size-7 flex-none rounded-lg object-cover" />
+      ) : (
+        <div className="flex size-7 flex-none items-center justify-center rounded-lg bg-white font-heading text-sm font-bold text-sidebar">
+          {name.charAt(0)}
+        </div>
+      )}
       {!collapsed && (
         <div className="min-w-0 leading-tight">
-          <div className="truncate font-heading text-[13px] font-semibold text-sidebar-foreground">{mockOrg.name}</div>
-          <div className="text-[11px] text-sidebar-foreground/60">{mockOrg.plan}</div>
+          <div className="truncate font-heading text-[13px] font-semibold text-sidebar-foreground">{name}</div>
+          <div className="text-[11px] text-sidebar-foreground/60">{org?.code}</div>
         </div>
       )}
     </div>
@@ -108,27 +118,40 @@ function NavLinks({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?:
 }
 
 function UserFooter({ collapsed }: { collapsed?: boolean }) {
-  const { role } = useSession();
-  const router = useRouter();
+  const { role, user } = useSession();
+  const { confirmOpen, setConfirmOpen, isSigningOut, confirmSignOut } = useSignOutConfirm();
+  const displayName = user?.fullName || user?.email || "…";
 
   return (
     <div className={cn("mt-auto flex items-center gap-2.5 border-t border-sidebar-border px-3 pt-3", collapsed && "justify-center")}>
       <div className="flex size-[30px] flex-none items-center justify-center rounded-full bg-white/15 text-xs font-semibold text-white">
-        AM
+        {user ? initialsFor(user.fullName, user.email) : "…"}
       </div>
       {!collapsed && (
         <div className="min-w-0 flex-1 leading-tight">
-          <div className="truncate text-[12.5px] font-semibold text-sidebar-foreground">Ama Mensah</div>
+          <div className="truncate text-[12.5px] font-semibold text-sidebar-foreground">{displayName}</div>
           <div className="text-[11px] text-sidebar-foreground/60 capitalize">{roleLabels[role]}</div>
         </div>
       )}
       <button
-        onClick={() => signOut(router)}
+        onClick={() => setConfirmOpen(true)}
         title="Sign out"
         className="flex-none cursor-pointer rounded-md p-1.5 text-sidebar-foreground/70 transition-colors duration-150 hover:bg-white/10 hover:text-sidebar-foreground"
       >
         <LogOut size={15} />
       </button>
+
+      <AppDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        kind="confirm"
+        severity="warning"
+        title="Sign out?"
+        description="You'll need to sign in again to access your organization."
+        confirmLabel="Sign out"
+        isConfirming={isSigningOut}
+        onConfirm={confirmSignOut}
+      />
     </div>
   );
 }
@@ -168,14 +191,20 @@ export function OrgNav() {
 
 export function MobileTopBar() {
   const [open, setOpen] = useState(false);
+  const { data: org } = useQuery({ queryKey: getOrganization.key, queryFn: getOrganization.fn });
+  const name = org?.name ?? "…";
 
   return (
     <div className="flex flex-none items-center justify-between border-b border-border bg-card px-4 py-2.5 lg:hidden">
       <div className="flex items-center gap-2">
-        <div className="flex size-6 items-center justify-center rounded-md bg-[#123C7A] font-heading text-xs font-bold text-white">
-          {mockOrg.name.charAt(0)}
-        </div>
-        <span className="font-heading text-[13px] font-semibold">{mockOrg.name}</span>
+        {org?.logoUrl ? (
+          <img src={org.logoUrl} alt="" className="size-6 rounded-md object-cover" />
+        ) : (
+          <div className="flex size-6 items-center justify-center rounded-md bg-[#123C7A] font-heading text-xs font-bold text-white">
+            {name.charAt(0)}
+          </div>
+        )}
+        <span className="font-heading text-[13px] font-semibold">{name}</span>
       </div>
       <Sheet open={open} onOpenChange={setOpen}>
         <Button variant="ghost" size="icon-sm" onClick={() => setOpen(true)}>

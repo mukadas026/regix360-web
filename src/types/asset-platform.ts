@@ -328,12 +328,16 @@ export type PendingInvite = {
   expires_at: string;
 };
 
-// No org-profile endpoint exists in api.md — this stays display-only mock data.
-export type Org = {
+// GET /api/organization — org self-service (docs/api.md "Organization").
+export type Organization = {
+  id: string;
   name: string;
-  plan: string;
-  contactEmail: string;
-  address: string;
+  code: string;
+  status: "active" | "suspended" | "pending";
+  contact_name: string | null;
+  contact_email: string | null;
+  address: string | null;
+  logoUrl: string | null;
 };
 
 export type CategoryOption = {

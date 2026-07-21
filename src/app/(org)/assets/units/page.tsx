@@ -13,6 +13,7 @@ import type { AssetStatus, AssetUnit, Condition } from "@/types/asset-platform";
 import { AppDialog } from "@/components/global/app-dialog";
 import { AssetDetailSheet } from "@/components/global/asset-detail-sheet";
 import { AssetEditDetailsDialog } from "@/components/global/asset-edit-details-dialog";
+import { AssetLabelDialog } from "@/components/global/asset-label-dialog";
 import { DataTable } from "@/components/global/data-table";
 import { PageContainer } from "@/components/global/page-container";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +82,7 @@ function UnitsContent() {
 
   const [historyUnitId, setHistoryUnitId] = useState<string | null>(null);
   const [editUnitId, setEditUnitId] = useState<string | null>(null);
+  const [qrUnitId, setQrUnitId] = useState<string | null>(null);
   const [conditionTarget, setConditionTarget] = useState<ConditionTarget | null>(null);
   const [custodianTarget, setCustodianTarget] = useState<CustodianTarget | null>(null);
   const [statusTarget, setStatusTarget] = useState<StatusTarget | null>(null);
@@ -171,7 +173,7 @@ function UnitsContent() {
               variant="ghost"
               size="icon-sm"
               title="View QR label"
-              onClick={() => window.open(`/labels/${unit.id}`, "_blank")}
+              onClick={() => setQrUnitId(unit.id)}
             >
               <QrCode size={15} />
             </Button>
@@ -262,6 +264,7 @@ function UnitsContent() {
         open={Boolean(editUnitId)}
         onOpenChange={(open) => !open && setEditUnitId(null)}
       />
+      <AssetLabelDialog unitId={qrUnitId} open={Boolean(qrUnitId)} onOpenChange={(open) => !open && setQrUnitId(null)} />
 
       {conditionTarget && (
         <AppDialog

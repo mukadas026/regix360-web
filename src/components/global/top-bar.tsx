@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Bell, ChevronLeft, LogOut, Settings } from "lucide-react";
 import { getPageInfo } from "@/lib/page-titles";
-import { signOut } from "@/lib/sign-out";
+import { initialsFor } from "@/lib/initials";
+import { useSignOutConfirm } from "@/lib/use-sign-out-confirm";
 import { useSession } from "@/providers/session-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,23 +17,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { AppDialog } from "@/components/global/app-dialog";
 
 const roleLabels = { org_admin: "Org admin", asset_manager: "Asset manager", viewer: "Viewer" };
 
-function initialsFor(name: string | null, email: string) {
-  const source = name?.trim() || email;
-  return source
-    .split(/[\s@.]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
-
 export function TopBar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { role, user } = useSession();
+  const { confirmOpen, setConfirmOpen, isSigningOut, confirmSignOut } = useSignOutConfirm();
   const { title, backHref } = getPageInfo(pathname);
 
   return (
@@ -82,12 +74,24 @@ export function TopBar() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={() => signOut(router)}>
+            <DropdownMenuItem variant="destructive" onClick={() => setConfirmOpen(true)}>
               <LogOut /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <AppDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        kind="confirm"
+        severity="warning"
+        title="Sign out?"
+        description="You'll need to sign in again to access your organization."
+        confirmLabel="Sign out"
+        isConfirming={isSigningOut}
+        onConfirm={confirmSignOut}
+      />
     </div>
   );
 }

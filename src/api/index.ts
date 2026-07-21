@@ -4,9 +4,6 @@ export type { ApiError } from "./client";
 // Feature endpoints live in sibling files and are re-exported here. Each
 // endpoint is `{ key, fn }`, consumed directly with useQuery/useMutation —
 // see src/api/client.ts for the shared axios instance.
-//
-// Every module below calls the real API (regix360-backend). Only `getOrg`
-// in ./org stays mock-backed — no org-profile endpoint exists yet.
 export * from "./auth";
 export * from "./assets";
 export * from "./locations";

@@ -1,11 +1,61 @@
-import { mockOrg } from "@/lib/mock-data";
-import type { OrgUser, PendingInvite, Role } from "@/types/asset-platform";
+import type { Organization, OrgUser, PendingInvite, Role } from "@/types/asset-platform";
+import { supabase } from "@/lib/supabase-client";
 import { client, throwError } from "./client";
 
-// No org-profile endpoint exists in api.md — this stays mock-backed intentionally.
-export const getOrg = {
-  key: ["org"] as const,
-  fn: async () => mockOrg,
+const LOGO_BUCKET = "company-logos";
+
+export const getOrganization = {
+  key: ["organization"] as const,
+  fn: async (): Promise<Organization> => {
+    try {
+      const res = await client.get<{ organization: Organization }>("/api/organization");
+      return res.data.organization;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
+
+export type UpdateOrganizationInput = {
+  contactName?: string;
+  contactEmail?: string;
+  address?: string;
+};
+
+export const updateOrganization = {
+  fn: async (input: UpdateOrganizationInput): Promise<Organization> => {
+    try {
+      const res = await client.patch<{ organization: Organization }>("/api/organization", input);
+      return res.data.organization;
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
+
+// Direct-to-Storage upload, same two-step pattern as the imports wizard:
+// mint a signed target, PUT the file straight to Storage, then confirm.
+export const uploadOrganizationLogo = {
+  fn: async (file: File): Promise<Organization> => {
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    let upload: { path: string; token: string; signedUrl: string };
+    try {
+      const res = await client.post<{ path: string; token: string; signedUrl: string }>("/api/organization/logo", { ext });
+      upload = res.data;
+    } catch (error) {
+      throwError(error);
+    }
+
+    const { error } = await supabase.storage.from(LOGO_BUCKET).uploadToSignedUrl(upload.path, upload.token, file);
+    if (error) throw { name: "ApiError", message: error.message ?? "The logo upload failed. Try again." };
+
+    try {
+      const res = await client.put<{ organization: Organization }>("/api/organization/logo", { path: upload.path });
+      return res.data.organization;
+    } catch (confirmError) {
+      throwError(confirmError);
+    }
+  },
 };
 
 export type OrgUsers = {

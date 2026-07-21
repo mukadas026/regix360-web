@@ -47,6 +47,7 @@ type AppDialogProps = {
   confirmDisabled?: boolean;
   children?: ReactNode;
   footer?: ReactNode;
+  contentClassName?: string;
 };
 
 /**
@@ -70,12 +71,13 @@ export function AppDialog({
   confirmDisabled = false,
   children,
   footer,
+  contentClassName,
 }: AppDialogProps) {
   const Icon = severityIcon[severity];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent className={cn("max-h-[85vh] overflow-y-auto", contentClassName)}>
         <DialogHeader>
           {kind !== "modal" && (
             <div className={cn("mb-1 flex size-9 items-center justify-center rounded-full", severityClass[severity])}>
