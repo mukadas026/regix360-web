@@ -292,16 +292,22 @@ export function DataTable<TData>({
                           key={header.id}
                           className="sticky top-0 z-10 h-11 bg-card px-5 text-[11px] font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase"
                         >
-                          <div className="flex items-center gap-1.5">
-                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                            {filterConfig && (
+                          {filterConfig ? (
+                            // Only wrap in a flex row when a filter button needs to sit next to the
+                            // label — the wrapper's flex item shrinks to content width, which would
+                            // otherwise swallow a header's own text-right/text-center alignment and
+                            // desync it from the matching (block-level, full-width) body cell.
+                            <div className="flex items-center gap-1.5">
+                              {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                               <ColumnFilterButton
                                 config={filterConfig}
                                 value={filterValue}
                                 onChange={(v) => header.column.setFilterValue(v || undefined)}
                               />
-                            )}
-                          </div>
+                            </div>
+                          ) : header.isPlaceholder ? null : (
+                            flexRender(header.column.columnDef.header, header.getContext())
+                          )}
                         </TableHead>
                       );
                     })}
