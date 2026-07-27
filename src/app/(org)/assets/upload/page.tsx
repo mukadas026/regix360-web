@@ -61,6 +61,73 @@ const MAPPING_FIELDS: MappingField[] = [
 
 const REQUIRED_FIELDS = ["description", "location", "department"];
 
+const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = [".xlsx", ".csv"];
+
+const SAMPLE_ROWS = [
+  [
+    "Description",
+    "Location",
+    "Department",
+    "Qty good",
+    "Qty fair",
+    "Qty bad",
+    "Manufacturer",
+    "Model",
+    "Serial number",
+    "Supplier",
+    "Acquisition method",
+    "Acquisition date",
+    "Acquisition cost",
+    "Notes",
+  ],
+  [
+    "Office chair",
+    "Head Office",
+    "Finance",
+    "8",
+    "2",
+    "0",
+    "Herman Miller",
+    "Aeron",
+    "",
+    "Acme Furniture Co.",
+    "purchase",
+    "2024-03-15",
+    "450.00",
+    "",
+  ],
+  [
+    "Laptop - Dell Latitude 5440",
+    "Head Office",
+    "IT",
+    "5",
+    "0",
+    "1",
+    "Dell",
+    "Latitude 5440",
+    "SN-2024-001",
+    "Tech Supplies Ltd.",
+    "purchase",
+    "2024-01-10",
+    "1200.00",
+    "Assigned to onboarding pool",
+  ],
+];
+
+function downloadSampleTemplate() {
+  const csv = SAMPLE_ROWS.map((row) =>
+    row.map((cell) => (/[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell)).join(","),
+  ).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "asset-upload-template.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 const steps = [
   { n: 1, label: "Upload" },
   { n: 2, label: "Map columns" },
@@ -174,6 +241,20 @@ export default function UploadAssetsPage() {
   const handleFileChosen = useCallback(
     (file: File | null) => {
       if (!file) return;
+
+      const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+      if (!ALLOWED_EXTENSIONS.includes(extension)) {
+        toast.error("Only .xlsx or .csv files are supported.");
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
+      if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+        toast.error("That file is too large — the limit is 10MB.");
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
       uploadMutation.mutate(file);
     },
     [uploadMutation],
@@ -240,10 +321,16 @@ export default function UploadAssetsPage() {
       {step === "upload" && (
         <div className="rounded-lg border border-border bg-card p-[26px]">
           <h2 className="mb-1.5 font-heading text-lg font-semibold">Upload your spreadsheet</h2>
-          <p className="mb-[18px] max-w-[520px] text-sm text-muted-foreground">
-            Upload an Excel (.xlsx) or CSV file — we&apos;ll help you map the columns next. Required: description,
-            location, and department.
+          <p className="mb-2.5 max-w-[520px] text-sm text-muted-foreground">
+            Upload an Excel (.xlsx) or CSV file, up to 10MB — we&apos;ll help you map the columns next. Required:
+            description, location, and department.
           </p>
+          <button
+            onClick={downloadSampleTemplate}
+            className="mb-[18px] text-[13px] font-semibold text-primary underline-offset-2 hover:underline"
+          >
+            Download sample template
+          </button>
           <input
             ref={fileInputRef}
             type="file"
