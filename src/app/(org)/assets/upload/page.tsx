@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
@@ -63,6 +63,13 @@ const REQUIRED_FIELDS = ["description", "location", "department"];
 
 const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = [".xlsx", ".csv"];
+const IMPORT_STALL_SECONDS = 60;
+
+function formatElapsed(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
 
 const SAMPLE_ROWS = [
   [
@@ -237,6 +244,17 @@ export default function UploadAssetsPage() {
   });
 
   const importRecord = statusQuery.data;
+
+  const [importElapsedSeconds, setImportElapsedSeconds] = useState(0);
+  useEffect(() => {
+    if (step !== "done") {
+      setImportElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const interval = setInterval(() => setImportElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [step]);
 
   const handleFileChosen = useCallback(
     (file: File | null) => {
@@ -573,10 +591,16 @@ export default function UploadAssetsPage() {
               <div className="mx-auto mb-4 flex size-[54px] items-center justify-center rounded-full bg-secondary text-[26px]">
                 ⏳
               </div>
-              <h2 className="mb-2 font-heading text-xl font-semibold">Importing…</h2>
-              <p className="text-[14.5px] text-muted-foreground">
-                This can take a few minutes for large files. You can leave this page — the import keeps running.
+              <h2 className="mb-1 font-heading text-xl font-semibold">Importing…</h2>
+              <p className="mb-2 font-mono text-[13px] text-muted-foreground">{formatElapsed(importElapsedSeconds)}</p>
+              <p className="mb-[22px] text-[14.5px] text-muted-foreground">
+                {importElapsedSeconds >= IMPORT_STALL_SECONDS
+                  ? "This is taking longer than usual. It's safe to leave — we'll keep processing and the register will reflect it once it's done."
+                  : "This can take a few minutes for large files. You can leave this page — the import keeps running."}
               </p>
+              <Button variant="outline" onClick={goBackToRegister}>
+                Back to register
+              </Button>
             </>
           ) : importRecord.status === "failed" ? (
             <>
