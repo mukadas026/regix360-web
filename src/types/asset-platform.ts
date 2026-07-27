@@ -119,6 +119,21 @@ export type AssetDetail = AssetUnit & {
   transfers: AssetTransferSnapshot[];
 };
 
+// GET /api/public/assets/:id — the QR-scan flow. Deliberately minimal:
+// no cost, supplier, serial number, custodian, or notes.
+export type PublicAsset = {
+  id: string;
+  code: string;
+  description: string;
+  condition: Condition;
+  status: AssetStatus;
+  category: string;
+  location_name: string;
+  department_name: string;
+  org_name: string;
+  org_logo_url: string | null;
+};
+
 export type AssetCodeRange = { condition: Condition; count: number; firstCode: string; lastCode: string };
 
 export type CreateAssetSummary = {

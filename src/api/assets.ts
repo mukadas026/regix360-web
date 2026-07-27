@@ -8,6 +8,7 @@ import type {
   Condition,
   ConditionHistoryEntry,
   CreateAssetSummary,
+  PublicAsset,
 } from "@/types/asset-platform";
 
 export type AssetSort = "updated" | "code" | "description" | "qty";
@@ -116,6 +117,19 @@ export const getAsset = {
     try {
       const res = await client.get<AssetDetailResponse>(`/api/assets/${id}`);
       return { ...res.data.asset, history: res.data.history, transfers: res.data.transfers };
+    } catch (error) {
+      throwError(error);
+    }
+  },
+};
+
+// Public QR-scan lookup — no auth required, minimal safe field subset.
+export const getPublicAsset = {
+  key: (id: string) => ["public-asset", id] as const,
+  fn: async (id: string): Promise<PublicAsset> => {
+    try {
+      const res = await client.get<PublicAsset>(`/api/public/assets/${id}`);
+      return res.data;
     } catch (error) {
       throwError(error);
     }

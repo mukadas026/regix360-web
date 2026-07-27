@@ -3,8 +3,14 @@ import type { Organization } from "@/types/asset-platform";
 import { cn } from "@/lib/utils";
 
 type LabelAsset = {
+  id: string;
   code: string;
 };
+
+function scanUrl(assetId: string) {
+  if (typeof window === "undefined") return assetId;
+  return `${window.location.origin}/scan/${assetId}`;
+}
 
 export function AssetLabel({ asset, org, className }: { asset: LabelAsset; org: Organization | undefined; className?: string }) {
   return (
@@ -23,7 +29,7 @@ export function AssetLabel({ asset, org, className }: { asset: LabelAsset; org: 
           )}
         </div>
 
-        <QRCodeSVG value={asset.code} size={92} />
+        <QRCodeSVG value={scanUrl(asset.id)} size={92} />
       </div>
 
       <div className="mt-2.5 border-t-2 border-neutral-900/15 pt-1.5 text-center font-mono text-[15px] font-extrabold tracking-wide text-neutral-900">
