@@ -10,6 +10,7 @@ import {
   getCategories,
   getDepartments,
   getImportStatus,
+  getLocations,
   initImport,
   markUploaded,
   previewImport,
@@ -244,6 +245,13 @@ export default function UploadAssetsPage() {
   });
 
   const importRecord = statusQuery.data;
+
+  useEffect(() => {
+    if (importRecord?.status !== "completed") return;
+    queryClient.invalidateQueries({ queryKey: ["assets"] });
+    queryClient.invalidateQueries({ queryKey: getLocations.key });
+    queryClient.invalidateQueries({ queryKey: getDepartments.key });
+  }, [importRecord?.status, queryClient]);
 
   const [importElapsedSeconds, setImportElapsedSeconds] = useState(0);
   useEffect(() => {
