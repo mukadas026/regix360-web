@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
+import { ChevronsUpDown } from "lucide-react";
 import { addAsset, getCategories, getDepartments, getLocations } from "@/api";
 import type { AddAssetInput } from "@/api/assets";
 import type { CategoryOption } from "@/types/asset-platform";
@@ -11,6 +12,15 @@ import { PageContainer } from "@/components/global/page-container";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 const acquisitionMethods: { value: AddAssetInput["acquisitionMethod"]; label: string }[] = [
   { value: "purchase", label: "Purchase" },
@@ -26,13 +36,11 @@ export default function AddAssetPage() {
 
   const [description, setDescription] = useState("");
 
-  const [categorySearch, setCategorySearch] = useState("");
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<CategoryOption | null>(null);
-  const { data: categoryResults } = useQuery({
-    queryKey: getCategories.key(categorySearch),
-    queryFn: () => getCategories.fn(categorySearch),
-    enabled: categorySearch.length >= 2 && categoryOpen,
+  const { data: categories } = useQuery({
+    queryKey: getCategories.key(""),
+    queryFn: () => getCategories.fn(""),
   });
 
   const [locationId, setLocationId] = useState("");
@@ -116,47 +124,60 @@ export default function AddAssetPage() {
         />
 
         <Label className="mb-1.5 text-[12.5px] font-semibold">Category</Label>
-        <div className="relative mb-3.5">
-          <Input
-            value={selectedCategory ? selectedCategory.name : categorySearch}
-            onChange={(e) => {
-              setSelectedCategory(null);
-              setCategorySearch(e.target.value);
-              setCategoryOpen(true);
-            }}
-            onFocus={() => setCategoryOpen(true)}
-            onBlur={() => setTimeout(() => setCategoryOpen(false), 150)}
-            placeholder="Search category dictionary…"
-          />
-          {categoryOpen && categorySearch.length >= 2 && categoryResults && categoryResults.length > 0 && (
-            <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-border bg-card shadow-md">
-              {categoryResults.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    setSelectedCategory(c);
-                    setCategoryOpen(false);
-                  }}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13px] hover:bg-secondary"
-                >
-                  <span>{c.name}</span>
+        <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="mb-3.5 flex h-10 w-full items-center justify-between rounded-md border border-input bg-card px-3 text-sm"
+            >
+              {selectedCategory ? (
+                <span className="flex items-center gap-2">
+                  <span>{selectedCategory.name}</span>
                   <span className="rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-[10.5px]">
-                    {c.code}
+                    {selectedCategory.code}
                   </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {selectedCategory && (
-          <div className="mb-3.5 flex items-center gap-2 rounded-md border border-[#CFE0F7] bg-accent px-3 py-2 text-[13px] text-accent-foreground">
-            <span className="font-semibold">Matched in dictionary:</span>
-            <span>{selectedCategory.name}</span>
-            <span className="rounded border border-[#CFE0F7] bg-card px-1.5 py-0.5 font-mono">{selectedCategory.code}</span>
-          </div>
-        )}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">Select a category</span>
+              )}
+              <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search categories…" />
+              <CommandList>
+                <CommandEmpty className="flex flex-col items-center gap-1 px-4 py-6 text-center">
+                  <span>No category found.</span>
+                  <span className="text-muted-foreground">
+                    Manage categories in{" "}
+                    <a href="/categories" className="underline">
+                      Settings
+                    </a>
+                    .
+                  </span>
+                </CommandEmpty>
+                <CommandGroup>
+                  {categories?.map((c) => (
+                    <CommandItem
+                      key={c.id}
+                      value={`${c.name} ${c.code}`}
+                      onSelect={() => {
+                        setSelectedCategory(c);
+                        setCategoryOpen(false);
+                      }}
+                    >
+                      <span>{c.name}</span>
+                      <span className="ml-auto rounded border border-border bg-secondary px-1.5 py-0.5 font-mono text-[10.5px]">
+                        {c.code}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
           <div>
