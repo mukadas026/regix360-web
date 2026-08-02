@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { setCookie } from "cookies-next";
@@ -64,7 +65,9 @@ export default function SetPasswordPage() {
       <div className="flex flex-1 items-center justify-center bg-secondary p-6 lg:bg-background">
         <div className="w-full max-w-[380px]">
           <div className="mb-7">
-            <Image src="/logo.png" alt="Regix360" width={2111} height={524} className="h-8 w-auto" priority />
+            <Link href="/">
+              <Image src="/logo.png" alt="Regix360" width={2111} height={524} className="h-8 w-auto" priority />
+            </Link>
           </div>
           <form
             className="rounded-lg border border-border bg-card p-[30px] lg:border-none lg:p-0"
