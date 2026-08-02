@@ -6,14 +6,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronLeft, MoreHorizontal, QrCode } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { getAssetUnits, getOrgUsers, updateAsset } from "@/api";
+import { getAsset, getAssetUnits, getOrgUsers, updateAsset } from "@/api";
 import type { ApiError } from "@/api";
 import type { AssetUnitsQuery } from "@/api/assets";
 import type { AssetStatus, AssetUnit, Condition } from "@/types/asset-platform";
 import { AppDialog } from "@/components/global/app-dialog";
 import { AssetDetailSheet } from "@/components/global/asset-detail-sheet";
 import { AssetEditDetailsDialog } from "@/components/global/asset-edit-details-dialog";
+import { AssetImageGalleryDialog } from "@/components/global/asset-image-gallery-dialog";
 import { AssetLabelDialog } from "@/components/global/asset-label-dialog";
+import { BatchPhotoViewerDialog } from "@/components/global/batch-photo-viewer-dialog";
 import { DataTable } from "@/components/global/data-table";
 import { PageContainer } from "@/components/global/page-container";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +60,7 @@ function UnitsContent() {
   const queryClient = useQueryClient();
   const { canEdit, isAdmin } = useSession();
 
+  const batchId = searchParams.get("batchId") ?? "";
   const description = searchParams.get("description") ?? "";
   const categoryItemId = searchParams.get("categoryItemId") ?? "";
   const locationId = searchParams.get("locationId") ?? "";
@@ -66,15 +69,35 @@ function UnitsContent() {
   const itemCode = searchParams.get("itemCode") ?? "";
   const locationName = searchParams.get("locationName") ?? "";
   const departmentName = searchParams.get("departmentName") ?? "";
+  const batchCreatedAt = searchParams.get("batchCreatedAt") ?? "";
 
-  const query: AssetUnitsQuery = { description, categoryItemId, locationId, departmentId };
-  const ready = Boolean(description && categoryItemId && locationId && departmentId);
+  const query: AssetUnitsQuery = batchId
+    ? { batchId }
+    : { description, categoryItemId, locationId, departmentId };
+  const ready = Boolean(batchId) || Boolean(description && categoryItemId && locationId && departmentId);
 
+  // staleTime: 0 — photo state (imageUrl per unit) can change from outside
+  // this exact page's own mutations, so always confirm freshness on visit
+  // rather than trusting the global 1h cache.
   const { data: units, isPending } = useQuery({
     queryKey: getAssetUnits.key(query),
     queryFn: () => getAssetUnits.fn(query),
     enabled: ready,
+    staleTime: 0,
   });
+
+  // A fresh signed batchImageUrl (and canonical batch_id) for the header —
+  // GET /api/assets/units doesn't carry the batch photo, only a per-unit
+  // thumbnail, so this is sourced from any one unit's full detail.
+  const firstUnitId = units?.[0]?.id;
+  const { data: batchDetail } = useQuery({
+    queryKey: getAsset.key(firstUnitId ?? ""),
+    queryFn: () => getAsset.fn(firstUnitId as string),
+    enabled: Boolean(firstUnitId),
+    staleTime: 0,
+  });
+  const photoBatchId = batchDetail?.batch_id;
+  const [viewingBatchPhoto, setViewingBatchPhoto] = useState(false);
 
   // GET /api/users is org_admin-only, so custodian reassignment only loads for admins.
   const { data: orgUsers } = useQuery({ queryKey: getOrgUsers.key, queryFn: getOrgUsers.fn, enabled: isAdmin });
@@ -83,6 +106,7 @@ function UnitsContent() {
   const [historyUnitId, setHistoryUnitId] = useState<string | null>(null);
   const [editUnitId, setEditUnitId] = useState<string | null>(null);
   const [qrUnitId, setQrUnitId] = useState<string | null>(null);
+  const [galleryUnitId, setGalleryUnitId] = useState<string | null>(null);
   const [conditionTarget, setConditionTarget] = useState<ConditionTarget | null>(null);
   const [custodianTarget, setCustodianTarget] = useState<CustodianTarget | null>(null);
   const [statusTarget, setStatusTarget] = useState<StatusTarget | null>(null);
@@ -129,6 +153,25 @@ function UnitsContent() {
   }
 
   const columns: ColumnDef<AssetUnit>[] = [
+    {
+      id: "photo",
+      header: "",
+      cell: ({ row }) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setGalleryUnitId(row.original.id);
+          }}
+          title={row.original.imageUrl ? "View this unit's photos" : "No photos yet"}
+        >
+          {row.original.imageUrl ? (
+            <img src={row.original.imageUrl} alt="" className="size-9 flex-none rounded-md object-cover" />
+          ) : (
+            <div className="size-9 flex-none rounded-md border border-dashed border-border" />
+          )}
+        </button>
+      ),
+    },
     {
       accessorKey: "code",
       header: "Code",
@@ -187,6 +230,7 @@ function UnitsContent() {
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuItem onClick={() => setHistoryUnitId(unit.id)}>View history</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setEditUnitId(unit.id)}>Edit details</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setGalleryUnitId(unit.id)}>Manage this unit&apos;s photos</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() => setConditionTarget({ id: unit.id, code: unit.code, condition: unit.condition })}
@@ -235,12 +279,26 @@ function UnitsContent() {
         <ChevronLeft size={15} /> Back to register
       </button>
 
-      <div className="mb-[18px]">
-        <h1 className="mb-1 font-heading text-2xl font-semibold tracking-tight">{description}</h1>
-        <p className="text-[13.5px] text-muted-foreground">
-          {category} <span className="font-mono">({itemCode})</span> · {locationName} / {departmentName} ·{" "}
-          {units?.length ?? 0} unit{units?.length === 1 ? "" : "s"}
-        </p>
+      <div className="mb-[18px] flex items-center gap-3.5">
+        <button onClick={() => setViewingBatchPhoto(true)} title="View batch photo">
+          {batchDetail?.batchImageUrl ? (
+            <img
+              src={batchDetail.batchImageUrl}
+              alt=""
+              className="size-14 flex-none rounded-lg border border-border object-cover"
+            />
+          ) : (
+            <div className="size-14 flex-none rounded-lg border border-dashed border-border" />
+          )}
+        </button>
+        <div className="min-w-0 flex-1">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">{description}</h1>
+          <p className="text-[13.5px] text-muted-foreground">
+            {category} <span className="font-mono">({itemCode})</span> · {locationName} / {departmentName} ·{" "}
+            {units?.length ?? 0} unit{units?.length === 1 ? "" : "s"}
+            {batchCreatedAt && <> · Added {new Date(batchCreatedAt).toLocaleDateString()}</>}
+          </p>
+        </div>
       </div>
 
       {!ready ? (
@@ -258,13 +316,34 @@ function UnitsContent() {
         />
       )}
 
-      <AssetDetailSheet assetId={historyUnitId} onClose={() => setHistoryUnitId(null)} />
+      <AssetDetailSheet
+        assetId={historyUnitId}
+        onClose={() => setHistoryUnitId(null)}
+        fallbackImageUrl={units?.find((u) => u.id === historyUnitId)?.imageUrl ?? null}
+      />
       <AssetEditDetailsDialog
         unitId={editUnitId}
         open={Boolean(editUnitId)}
         onOpenChange={(open) => !open && setEditUnitId(null)}
       />
       <AssetLabelDialog unitId={qrUnitId} open={Boolean(qrUnitId)} onOpenChange={(open) => !open && setQrUnitId(null)} />
+      <AssetImageGalleryDialog
+        assetId={galleryUnitId}
+        open={Boolean(galleryUnitId)}
+        onOpenChange={(open) => !open && setGalleryUnitId(null)}
+        fallbackImageUrl={units?.find((u) => u.id === galleryUnitId)?.imageUrl ?? null}
+      />
+      <BatchPhotoViewerDialog
+        batchId={photoBatchId ?? null}
+        imageUrl={batchDetail?.batchImageUrl ?? null}
+        open={viewingBatchPhoto}
+        onOpenChange={setViewingBatchPhoto}
+        onChanged={() => {
+          queryClient.invalidateQueries({ queryKey: getAsset.key(firstUnitId ?? "") });
+          queryClient.invalidateQueries({ queryKey: ["assets"] });
+        }}
+        canManage={canEdit}
+      />
 
       {conditionTarget && (
         <AppDialog

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-hot-toast";
-import { ChevronsUpDown } from "lucide-react";
-import { addAsset, getCategories, getDepartments, getLocations } from "@/api";
+import { ChevronsUpDown, ImageIcon } from "lucide-react";
+import { addAsset, getCategories, getDepartments, getLocations, uploadBatchImage } from "@/api";
+import type { ApiError } from "@/api";
 import type { AddAssetInput } from "@/api/assets";
 import type { CategoryOption } from "@/types/asset-platform";
 import { PageContainer } from "@/components/global/page-container";
@@ -33,6 +34,45 @@ export default function AddAssetPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: locations } = useQuery({ queryKey: getLocations.key, queryFn: getLocations.fn });
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagePath, setImagePath] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
+
+  const { mutate: uploadImage, isPending: isUploadingImage } = useMutation({
+    mutationFn: (file: File) => uploadBatchImage.fn(file),
+    onSuccess: (path) => setImagePath(path),
+    onError: (error) => {
+      toast.error((error as ApiError).message ?? "Couldn't upload that photo.");
+      setImagePreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    },
+  });
+
+  function handleImageSelect(file: File) {
+    setImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setImagePath(null);
+    uploadImage(file);
+  }
+
+  function handleImageRemove() {
+    setImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setImagePath(null);
+  }
 
   const [description, setDescription] = useState("");
 
@@ -98,6 +138,7 @@ export default function AddAssetPage() {
       acquisitionCost: acquisitionCost ? Number(acquisitionCost) : null,
       customCode: customCode || null,
       notes: notes || null,
+      imagePath,
     });
   }
 
@@ -110,6 +151,50 @@ export default function AddAssetPage() {
         ← Back to register
       </button>
       <h1 className="mb-[22px] font-heading text-2xl font-semibold tracking-tight">Add asset</h1>
+
+      <div className="mb-4 rounded-lg border border-border bg-card px-6 py-[22px]">
+        <div className="mb-3.5 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+          Photo <span className="font-normal text-muted-foreground normal-case">— optional</span>
+        </div>
+        <div className="flex items-center gap-4">
+          {imagePreview ? (
+            <img src={imagePreview} alt="" className="size-14 flex-none rounded-lg border border-border object-cover" />
+          ) : (
+            <div className="flex size-14 flex-none items-center justify-center rounded-lg border border-border bg-secondary text-muted-foreground">
+              <ImageIcon className="size-5" />
+            </div>
+          )}
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/heic"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImageSelect(file);
+                e.target.value = "";
+              }}
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isUploadingImage}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {isUploadingImage ? "Uploading…" : imagePreview ? "Change photo" : "Upload photo"}
+              </Button>
+              {imagePreview && (
+                <Button variant="outline" size="sm" onClick={handleImageRemove} disabled={isUploadingImage}>
+                  Remove
+                </Button>
+              )}
+            </div>
+            <p className="mt-1.5 text-xs text-muted-foreground">PNG, JPG, WEBP, or HEIC.</p>
+          </div>
+        </div>
+      </div>
 
       <div className="mb-4 rounded-lg border border-border bg-card px-6 py-[22px]">
         <div className="mb-3.5 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
@@ -308,7 +393,7 @@ export default function AddAssetPage() {
       </div>
 
       <div className="flex gap-2.5">
-        <Button onClick={handleSave} disabled={!canSave || isPending}>
+        <Button onClick={handleSave} disabled={!canSave || isPending || isUploadingImage}>
           Add asset
         </Button>
         <Button variant="outline" onClick={() => router.push("/assets")}>

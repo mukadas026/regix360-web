@@ -44,6 +44,7 @@ const MAPPING_FIELDS: MappingField[] = [
   { value: "description", label: "Description" },
   { value: "location", label: "Location" },
   { value: "department", label: "Department" },
+  { value: "category", label: "Category" },
   { value: "qty_good", label: "Qty good" },
   { value: "qty_fair", label: "Qty fair" },
   { value: "qty_bad", label: "Qty bad" },
@@ -77,6 +78,7 @@ const SAMPLE_ROWS = [
     "Description",
     "Location",
     "Department",
+    "Category",
     "Qty good",
     "Qty fair",
     "Qty bad",
@@ -93,6 +95,7 @@ const SAMPLE_ROWS = [
     "Office chair",
     "Head Office",
     "Finance",
+    "Furniture",
     "8",
     "2",
     "0",
@@ -109,6 +112,7 @@ const SAMPLE_ROWS = [
     "Laptop - Dell Latitude 5440",
     "Head Office",
     "IT",
+    "IT Equipment",
     "5",
     "0",
     "1",
@@ -530,22 +534,22 @@ export default function UploadAssetsPage() {
             </div>
           )}
 
-          {previewResult.unmatchedDescriptions.length > 0 && (
+          {previewResult.unmatchedCategories.length > 0 && (
             <div className="rounded-lg border border-border bg-card px-5 py-[18px]">
               <div className="mb-1 font-heading text-[14.5px] font-semibold">
                 Unmatched items{" "}
                 <span className="font-normal text-muted-foreground">— pick a category so we can generate a code</span>
               </div>
               <div className="mt-2.5">
-                {previewResult.unmatchedDescriptions.map((desc) => (
+                {previewResult.unmatchedCategories.map((name) => (
                   <div
-                    key={desc}
+                    key={name}
                     className="flex flex-wrap items-center justify-between gap-3 border-b border-border py-2.5 last:border-b-0"
                   >
-                    <div className="min-w-0 text-[13.5px]">{desc}</div>
+                    <div className="min-w-0 text-[13.5px]">{name}</div>
                     <CategoryPicker
-                      value={categoryOverrides[desc]}
-                      onChange={(itemId) => setCategoryOverrides((prev) => ({ ...prev, [desc]: itemId }))}
+                      value={categoryOverrides[name]}
+                      onChange={(itemId) => setCategoryOverrides((prev) => ({ ...prev, [name]: itemId }))}
                     />
                   </div>
                 ))}

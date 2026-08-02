@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Eye, Layers, Printer } from "lucide-react";
 import { toast } from "react-hot-toast";
@@ -11,6 +11,7 @@ import { client } from "@/api/client";
 import { getAssets, getCategories, getLocations } from "@/api";
 import type { AssetFilters, AssetSort } from "@/api/assets";
 import type { AssetGroup, Condition, Department } from "@/types/asset-platform";
+import { BatchPhotoViewerDialog } from "@/components/global/batch-photo-viewer-dialog";
 import { ConditionBar } from "@/components/global/condition-bar";
 import { DataTable } from "@/components/global/data-table";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,9 @@ import { useSession } from "@/providers/session-provider";
 function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { canEdit } = useSession();
+  const [viewingBatch, setViewingBatch] = useState<AssetGroup | null>(null);
 
   const search = searchParams.get("search") ?? "";
   const locationId = searchParams.get("location") ?? "";
@@ -54,6 +57,7 @@ function RegisterContent() {
   const { data, isPending } = useQuery({
     queryKey: getAssets.key(filters),
     queryFn: () => getAssets.fn(filters),
+    staleTime: 0,
   });
 
   function updateParam(key: string, value: string) {
@@ -70,6 +74,8 @@ function RegisterContent() {
 
   function openGroup(group: AssetGroup) {
     const params = new URLSearchParams({
+      batchId: group.batch_id,
+      batchCreatedAt: group.batch_created_at,
       description: group.description,
       categoryItemId: group.category_item_id,
       locationId: group.location_id,
@@ -95,6 +101,25 @@ function RegisterContent() {
 
   const columns = useMemo<ColumnDef<AssetGroup, unknown>[]>(
     () => [
+      {
+        id: "photo",
+        header: "",
+        cell: ({ row }) => (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setViewingBatch(row.original);
+            }}
+            title={row.original.batchImageUrl ? "View batch photo" : "No batch photo"}
+          >
+            {row.original.batchImageUrl ? (
+              <img src={row.original.batchImageUrl} alt="" className="size-9 flex-none rounded-md object-cover" />
+            ) : (
+              <div className="size-9 flex-none rounded-md border border-dashed border-border" />
+            )}
+          </button>
+        ),
+      },
       {
         accessorKey: "description",
         header: "Asset",
@@ -281,7 +306,7 @@ function RegisterContent() {
           columns={columns}
           isLoading={isPending}
           onRowClick={openGroup}
-          getRowId={(row) => `${row.description}::${row.category_item_id}::${row.location_id}::${row.department_id}`}
+          getRowId={(row) => row.batch_id}
           pageSize={50}
           emptyTitle="No assets match these filters"
           emptyAction={
@@ -325,6 +350,15 @@ function RegisterContent() {
           </div>
         )}
       </div>
+
+      <BatchPhotoViewerDialog
+        batchId={viewingBatch?.batch_id ?? null}
+        imageUrl={viewingBatch?.batchImageUrl ?? null}
+        open={Boolean(viewingBatch)}
+        onOpenChange={(open) => !open && setViewingBatch(null)}
+        onChanged={() => queryClient.invalidateQueries({ queryKey: ["assets"] })}
+        canManage={canEdit}
+      />
     </div>
   );
 }

@@ -1,13 +1,17 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getAsset } from "@/api";
 import type { AssetStatus, Condition } from "@/types/asset-platform";
 import { AssetCodeChip } from "@/components/global/asset-code-chip";
+import { AssetImageGalleryDialog } from "@/components/global/asset-image-gallery-dialog";
+import { BatchPhotoViewerDialog } from "@/components/global/batch-photo-viewer-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSession } from "@/providers/session-provider";
 
 const conditionBadgeVariant: Record<Condition, "default" | "secondary" | "destructive"> = {
   good: "default",
@@ -38,14 +42,32 @@ function formatMoney(value: number | null) {
  * maintenance, disposal) live on the asset group page's per-unit menu —
  * this sheet is deliberately just a viewer, opened from "View history".
  */
-export function AssetDetailSheet({ assetId, onClose }: { assetId: string | null; onClose: () => void }) {
+export function AssetDetailSheet({
+  assetId,
+  onClose,
+  fallbackImageUrl = null,
+}: {
+  assetId: string | null;
+  onClose: () => void;
+  // The unit's own thumbnail, already known from wherever this sheet was
+  // opened (e.g. the units table row) — passed through to the gallery
+  // dialog as a safety net (see AssetImageGalleryDialog).
+  fallbackImageUrl?: string | null;
+}) {
+  const { canEdit } = useSession();
+  const queryClient = useQueryClient();
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [batchPhotoOpen, setBatchPhotoOpen] = useState(false);
+
   const { data: asset, isPending } = useQuery({
     queryKey: getAsset.key(assetId ?? ""),
     queryFn: () => getAsset.fn(assetId as string),
     enabled: Boolean(assetId),
+    staleTime: 0,
   });
 
   return (
+    <>
     <Sheet open={Boolean(assetId)} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-[460px] max-w-[92vw] gap-0 p-0 sm:max-w-[92vw]">
         {isPending || !asset ? (
@@ -130,6 +152,44 @@ export function AssetDetailSheet({ assetId, onClose }: { assetId: string | null;
                 </div>
               </div>
 
+              {(asset.batchImageUrl || asset.images.length > 0) && (
+                <div className="mb-6">
+                  <div className="mb-3 text-[11px] font-semibold tracking-[0.07em] text-muted-foreground uppercase">
+                    Photos
+                  </div>
+                  {asset.batchImageUrl && (
+                    <div className="mb-3">
+                      <div className="mb-1 text-[11.5px] text-muted-foreground">Batch photo (shared)</div>
+                      <button onClick={() => setBatchPhotoOpen(true)} title="View batch photo">
+                        <img
+                          src={asset.batchImageUrl}
+                          alt=""
+                          className="size-20 rounded-lg border border-border object-cover"
+                        />
+                      </button>
+                    </div>
+                  )}
+                  {asset.images.length > 0 && (
+                    <div>
+                      <div className="mb-1 text-[11.5px] text-muted-foreground">This unit&apos;s photos</div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {[...asset.images]
+                          .sort((a, b) => a.position - b.position)
+                          .map((img) => (
+                            <button key={img.id} onClick={() => setGalleryOpen(true)} title="View this unit's photos">
+                              <img
+                                src={img.url}
+                                alt=""
+                                className="aspect-square w-full rounded-md border border-border object-cover"
+                              />
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {asset.notes && (
                 <div className="mb-6 rounded-xl border border-border px-4 py-3.5">
                   <div className="mb-1.5 text-[11px] font-semibold tracking-[0.07em] text-muted-foreground uppercase">
@@ -191,6 +251,11 @@ export function AssetDetailSheet({ assetId, onClose }: { assetId: string | null;
             </div>
 
             <div className="flex flex-none gap-2 border-t border-border p-3.5">
+              {canEdit && (
+                <Button variant="outline" className="flex-1" onClick={() => setGalleryOpen(true)}>
+                  Manage this unit&apos;s photos
+                </Button>
+              )}
               <Button variant="outline" className="flex-1" onClick={() => window.open(`/labels/${asset.id}`, "_blank")}>
                 Print label
               </Button>
@@ -199,5 +264,23 @@ export function AssetDetailSheet({ assetId, onClose }: { assetId: string | null;
         )}
       </SheetContent>
     </Sheet>
+    <AssetImageGalleryDialog
+      assetId={assetId}
+      open={galleryOpen}
+      onOpenChange={setGalleryOpen}
+      fallbackImageUrl={fallbackImageUrl}
+    />
+    <BatchPhotoViewerDialog
+      batchId={asset?.batch_id ?? null}
+      imageUrl={asset?.batchImageUrl ?? null}
+      open={batchPhotoOpen}
+      onOpenChange={setBatchPhotoOpen}
+      onChanged={() => {
+        queryClient.invalidateQueries({ queryKey: getAsset.key(assetId ?? "") });
+        queryClient.invalidateQueries({ queryKey: ["assets"] });
+      }}
+      canManage={canEdit}
+    />
+    </>
   );
 }

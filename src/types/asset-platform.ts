@@ -37,9 +37,14 @@ export type Department = {
 };
 
 // Assets — one row is one PHYSICAL UNIT. The register list is GROUPED
-// (by description+category+location+department); drill down for units.
+// BY BATCH (changed 2026-08-02 — each POST /api/assets call is its own
+// permanent group; two batches of the same description/location/department
+// no longer merge). Drill down via batch_id for units.
 
 export type AssetGroup = {
+  batch_id: string;
+  batch_created_at: string;
+  batchImageUrl: string | null;
   description: string;
   category_item_id: string;
   category: string;
@@ -57,10 +62,12 @@ export type AssetGroup = {
 
 export type AssetUnit = {
   id: string;
+  batch_id: string;
   code: string;
   unit_serial: string;
   condition: Condition;
   status: AssetStatus;
+  imageUrl: string | null;
   manufacturer: string | null;
   model: string | null;
   serial_number: string | null;
@@ -72,6 +79,16 @@ export type AssetUnit = {
   custodian_name: string | null;
   created_at: string;
   updated_at: string;
+};
+
+// One photo in a unit's gallery (POST/PUT /api/assets/:id/images).
+export type AssetImage = {
+  id: string;
+  url: string;
+  position: number;
+  created_at: string;
+  uploaded_by?: string;
+  uploaded_by_name?: string;
 };
 
 export type ConditionHistoryEntry = {
@@ -115,6 +132,9 @@ export type AssetDetail = AssetUnit & {
   item_code: string;
   custom_code: string | null;
   notes: string | null;
+  batch_created_at: string;
+  batchImageUrl: string | null;
+  images: AssetImage[];
   history: ConditionHistoryEntry[];
   transfers: AssetTransferSnapshot[];
 };
@@ -138,6 +158,9 @@ export type AssetCodeRange = { condition: Condition; count: number; firstCode: s
 
 export type CreateAssetSummary = {
   created: number;
+  batchId: string;
+  batchCreatedAt: string;
+  batchImageUrl: string | null;
   description: string;
   locationId: string;
   departmentId: string;
@@ -299,7 +322,7 @@ export type ImportPreviewResult = {
   unitTotal: number;
   skipped: ImportSkippedRow[];
   categoryMatches: Record<string, ImportCategoryMatch>;
-  unmatchedDescriptions: string[];
+  unmatchedCategories: string[];
   newLocations: { name: string; suggestedCode: string }[];
   newDepartments: { location: string; name: string; suggestedCode: string }[];
 };
