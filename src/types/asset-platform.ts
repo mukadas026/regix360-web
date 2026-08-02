@@ -152,6 +152,9 @@ export type PublicAsset = {
   department_name: string;
   org_name: string;
   org_logo_url: string | null;
+  // One representative photo — this unit's own if it has one, else the
+  // batch's shared photo — null if neither exists.
+  imageUrl: string | null;
 };
 
 export type AssetCodeRange = { condition: Condition; count: number; firstCode: string; lastCode: string };

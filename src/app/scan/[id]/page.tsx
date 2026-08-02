@@ -64,6 +64,14 @@ export default function AssetScanPage({ params }: { params: Promise<{ id: string
         <h1 className="mb-1 font-heading text-lg font-semibold">{asset.description}</h1>
         <p className="mb-4 font-mono text-[13px] text-muted-foreground">{asset.code}</p>
 
+        {asset.imageUrl && (
+          <img
+            src={asset.imageUrl}
+            alt=""
+            className="mb-4 aspect-video w-full rounded-md border border-border object-cover"
+          />
+        )}
+
         <div className="mb-4 flex items-center gap-2">
           <Badge variant={conditionBadgeVariant[asset.condition]} className="capitalize">
             {asset.condition}
